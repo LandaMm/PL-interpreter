@@ -19,7 +19,7 @@ impl std::fmt::Display for InterpreterError {
             InterpreterError::UnsupportedNode(node) => {
                 write!(
                     f,
-                    "This node is not supported by interpreter yet: {:?}",
+                    "This node is not supported by interpreter yet: {:#?}",
                     node
                 )
             }

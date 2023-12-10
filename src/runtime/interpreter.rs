@@ -2,7 +2,7 @@ use pl_ast::{BinaryOperator, Node};
 
 use crate::{
     macros::bail,
-    values::{DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
+    values::{self, DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
     Environment,
 };
 
@@ -18,7 +18,7 @@ impl Interpreter {
     pub fn evaluate(
         &self,
         node: Box<Node>,
-        env: &Environment,
+        env: &mut Environment,
     ) -> Result<Box<dyn RuntimeValue>, InterpreterError> {
         match *node {
             Node::IntegerLiteral(value) => return Ok(Box::new(IntegerValue::from(value as isize))),
@@ -26,14 +26,49 @@ impl Interpreter {
             Node::NullLiteral() => return Ok(Box::new(NullValue::default())),
             Node::Program(program) => return Ok(self.eval_program(program, env)?),
             Node::BinaryExpression(..) => return Ok(self.eval_binary_expression(node, env)?),
+            Node::Identifier(identifier) => return Ok(self.eval_identifier(identifier, env)?),
+            Node::VariableDeclaration(variable_name, value, is_constant) => {
+                return Ok(self.eval_variable_declaration(
+                    variable_name,
+                    value,
+                    is_constant,
+                    env,
+                )?)
+            }
             node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
         }
+    }
+
+    fn eval_variable_declaration(
+        &self,
+        variable_name: String,
+        value: Option<Box<Node>>,
+        is_constant: bool,
+        env: &mut Environment,
+    ) -> Result<Box<dyn RuntimeValue>, InterpreterError> {
+        let value = match value {
+            Some(value) => self.evaluate(value, env)?,
+            None => Box::new(NullValue::default()),
+        };
+
+        env.declare_variable(variable_name.clone(), value)?;
+
+        Ok(dyn_clone::clone_box(&**env.lookup_variable(variable_name)?))
+    }
+
+    fn eval_identifier(
+        &self,
+        identifier: String,
+        env: &Environment,
+    ) -> Result<Box<dyn RuntimeValue>, InterpreterError> {
+        let val = env.lookup_variable(identifier)?;
+        Ok(dyn_clone::clone_box(&**val))
     }
 
     fn eval_statements(
         &self,
         statements: Vec<Box<Node>>,
-        env: &Environment,
+        env: &mut Environment,
     ) -> Result<Box<dyn RuntimeValue>, InterpreterError> {
         let mut last_evaluated: Box<dyn RuntimeValue> = Box::new(NullValue::default());
 
@@ -47,7 +82,7 @@ impl Interpreter {
     fn eval_program(
         &self,
         statements: Vec<Box<Node>>,
-        env: &Environment,
+        env: &mut Environment,
     ) -> Result<Box<dyn RuntimeValue>, InterpreterError> {
         return Ok(self.eval_statements(statements, env)?);
     }
@@ -178,7 +213,7 @@ impl Interpreter {
     fn eval_binary_expression(
         &self,
         node: Box<Node>,
-        env: &Environment,
+        env: &mut Environment,
     ) -> Result<Box<dyn RuntimeValue>, InterpreterError> {
         if let Node::BinaryExpression(left, operator, right) = *node {
             let left = self.evaluate(left, env)?;

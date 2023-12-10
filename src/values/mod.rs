@@ -2,10 +2,12 @@ use std::{any::Any, fmt::Debug};
 
 use dyn_clone::DynClone;
 
+mod bool;
 mod decimal;
 mod integer;
 mod null;
 
+pub use bool::*;
 pub use decimal::*;
 pub use integer::*;
 pub use null::*;
@@ -15,6 +17,7 @@ pub enum ValueType {
     Null,
     Integer,
     Decimal,
+    Boolean,
 }
 
 pub trait RuntimeValue: DynClone {
@@ -39,6 +42,12 @@ impl Debug for dyn RuntimeValue {
             }
             ValueType::Null => {
                 write!(f, "Null")
+            }
+            ValueType::Boolean => {
+                let clo = dyn_clone::clone_box(self);
+                let any = clo.into_any();
+                let value = any.downcast::<BoolValue>().unwrap();
+                write!(f, "{:?}", value)
             }
         }
     }
