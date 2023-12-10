@@ -12,6 +12,7 @@ pub enum InterpreterError {
     VariableDeclarationExist(String),
     UnresolvedVariable(String),
     ReassignConstant(String),
+    InvalidAssignFactor(Box<Node>),
 }
 
 impl std::fmt::Display for InterpreterError {
@@ -47,10 +48,17 @@ impl std::fmt::Display for InterpreterError {
                 )
             }
             InterpreterError::UnresolvedVariable(variable_name) => {
-                write!(f, "Cannot resolve {variable_name} as it doesn't exist")
+                write!(f, "Cannot resolve \"{variable_name}\" as it doesn't exist")
             }
             InterpreterError::ReassignConstant(variable_name) => {
-                write!(f, "Cannot reassign {variable_name} as it's a constant")
+                write!(f, "Cannot reassign \"{variable_name}\" as it's a constant")
+            }
+            InterpreterError::InvalidAssignFactor(factor) => {
+                write!(
+                    f,
+                    "Invalid left-hand side for assignment expression: {:?}",
+                    factor
+                )
             }
         }
     }
