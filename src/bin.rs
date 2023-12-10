@@ -10,9 +10,9 @@ fn main() -> Result<(), InterpreterError> {
     let interpreter = Interpreter::new();
 
     let mut environment = Environment::new(None);
-    environment.declare_variable("true".to_string(), Box::new(BoolValue::from(true)))?;
-    environment.declare_variable("false".to_string(), Box::new(BoolValue::from(false)))?;
-    environment.declare_variable("null".to_string(), Box::new(NullValue::default()))?;
+    environment.declare_variable("true".to_string(), Box::new(BoolValue::from(true)), true)?;
+    environment.declare_variable("false".to_string(), Box::new(BoolValue::from(false)), true)?;
+    environment.declare_variable("null".to_string(), Box::new(NullValue::default()), true)?;
 
     let result = match interpreter.evaluate(Box::new(ast), &mut environment) {
         Ok(res) => res,

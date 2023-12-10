@@ -2,7 +2,7 @@ use pl_ast::{BinaryOperator, Node};
 
 use crate::{
     macros::bail,
-    values::{self, DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
+    values::{DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
     Environment,
 };
 
@@ -51,7 +51,7 @@ impl Interpreter {
             None => Box::new(NullValue::default()),
         };
 
-        env.declare_variable(variable_name.clone(), value)?;
+        env.declare_variable(variable_name.clone(), value, is_constant)?;
 
         Ok(dyn_clone::clone_box(&**env.lookup_variable(variable_name)?))
     }

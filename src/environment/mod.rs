@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{macros::bail, InterpreterError, RuntimeValue};
 
@@ -6,6 +6,7 @@ use crate::{macros::bail, InterpreterError, RuntimeValue};
 pub struct Environment {
     parent: Option<Box<Environment>>,
     variables: HashMap<String, Box<dyn RuntimeValue>>,
+    constants: HashSet<String>,
 }
 
 impl Environment {
@@ -13,6 +14,7 @@ impl Environment {
         Self {
             parent: parent_env,
             variables: HashMap::new(),
+            constants: HashSet::new(),
         }
     }
 
@@ -20,12 +22,17 @@ impl Environment {
         &mut self,
         variable_name: String,
         value: Box<dyn RuntimeValue>,
+        is_constant: bool,
     ) -> Result<&Box<dyn RuntimeValue>, InterpreterError> {
         if self.variables.contains_key(&variable_name) {
             bail!(InterpreterError::VariableDeclarationExist(variable_name))
         }
 
         self.variables.insert(variable_name.clone(), value);
+
+        if is_constant {
+            self.constants.insert(variable_name.clone());
+        }
 
         Ok(self.variables.get(&variable_name).unwrap())
     }
@@ -36,6 +43,11 @@ impl Environment {
         value: Box<dyn RuntimeValue>,
     ) -> Result<&Box<dyn RuntimeValue>, InterpreterError> {
         let env = self.resolve_mut(variable_name.clone())?;
+
+        if env.constants.contains(&variable_name) {
+            bail!(InterpreterError::ReassignConstant(variable_name.clone()))
+        }
+
         env.variables
             .entry(variable_name.clone())
             .and_modify(|val| *val = value);

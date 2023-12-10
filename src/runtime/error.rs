@@ -11,6 +11,7 @@ pub enum InterpreterError {
     ValueCastError(Box<dyn RuntimeValue>, String),
     VariableDeclarationExist(String),
     UnresolvedVariable(String),
+    ReassignConstant(String),
 }
 
 impl std::fmt::Display for InterpreterError {
@@ -47,6 +48,9 @@ impl std::fmt::Display for InterpreterError {
             }
             InterpreterError::UnresolvedVariable(variable_name) => {
                 write!(f, "Cannot resolve {variable_name} as it doesn't exist")
+            }
+            InterpreterError::ReassignConstant(variable_name) => {
+                write!(f, "Cannot reassign {variable_name} as it's a constant")
             }
         }
     }
