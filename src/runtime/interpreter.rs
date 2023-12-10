@@ -1,4 +1,4 @@
-use pl_ast::{BinaryOperator, Node};
+use pl_ast::{AssignmentOperator, BinaryOperator, Node};
 
 use crate::{
     macros::bail,
@@ -35,8 +35,28 @@ impl Interpreter {
                     env,
                 )?)
             }
+            Node::AssignmentExpression(left, operator, right) => {
+                return Ok(self.eval_assignment_expression(left, operator, right, env)?)
+            }
             node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
         }
+    }
+
+    fn eval_assignment_expression(
+        &self,
+        left: Box<Node>,
+        // TODO: add support for operator
+        operator: AssignmentOperator,
+        right: Box<Node>,
+        env: &mut Environment,
+    ) -> Result<Box<dyn RuntimeValue>, InterpreterError> {
+        if let Node::Identifier(variable_name) = *left {
+            let right = self.evaluate(right, env)?;
+            let value = env.assign_variable(variable_name, right)?;
+            let new_value = dyn_clone::clone_box(&**value);
+            return Ok(new_value);
+        }
+        bail!(InterpreterError::InvalidAssignFactor(left))
     }
 
     fn eval_variable_declaration(
