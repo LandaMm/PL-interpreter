@@ -7,6 +7,10 @@ edition = "2021"
 name = "pl_interpreter"
 path = "src/lib.rs"
 
+[[bin]]
+name = "pl_interpreter_bin"
+path = "src/bin.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

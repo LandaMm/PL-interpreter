@@ -10,6 +10,10 @@ impl RuntimeValue for DecimalValue {
     fn kind(&self) -> ValueType {
         self.kind
     }
+
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self
+    }
 }
 
 impl From<f64> for DecimalValue {
@@ -22,7 +26,7 @@ impl From<f64> for DecimalValue {
 }
 
 impl DecimalValue {
-    fn value(&self) -> f64 {
+    pub fn value(&self) -> f64 {
         self.value
     }
 }
