@@ -1,4 +1,6 @@
 let x = 45 / 2.0
 x - 2.5
-let true = 50
-true
+x = 50
+x - 50
+x = x + 50
+x = x - 2
