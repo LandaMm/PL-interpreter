@@ -13,6 +13,7 @@ pub enum InterpreterError {
     UnresolvedVariable(String),
     ReassignConstant(String),
     InvalidAssignFactor(Box<Node>),
+    InvalidFunctionCallee(Box<dyn RuntimeValue>),
 }
 
 impl std::fmt::Display for InterpreterError {
@@ -59,6 +60,9 @@ impl std::fmt::Display for InterpreterError {
                     "Invalid left-hand side for assignment expression: {:?}",
                     factor
                 )
+            }
+            InterpreterError::InvalidFunctionCallee(value) => {
+                write!(f, "Invalid function callee: {value:?}")
             }
         }
     }

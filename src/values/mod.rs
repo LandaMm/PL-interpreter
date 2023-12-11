@@ -5,11 +5,13 @@ use dyn_clone::DynClone;
 mod bool;
 mod decimal;
 mod integer;
+mod native_fn;
 mod null;
 
 pub use bool::*;
 pub use decimal::*;
 pub use integer::*;
+pub use native_fn::*;
 pub use null::*;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -18,6 +20,7 @@ pub enum ValueType {
     Integer,
     Decimal,
     Boolean,
+    NativeFn,
 }
 
 pub trait RuntimeValue: DynClone {
@@ -47,6 +50,12 @@ impl Debug for dyn RuntimeValue {
                 let clo = dyn_clone::clone_box(self);
                 let any = clo.into_any();
                 let value = any.downcast::<BoolValue>().unwrap();
+                write!(f, "{:?}", value)
+            }
+            ValueType::NativeFn => {
+                let clo = dyn_clone::clone_box(self);
+                let any = clo.into_any();
+                let value = any.downcast::<NativeFnValue>().unwrap();
                 write!(f, "{:?}", value)
             }
         }

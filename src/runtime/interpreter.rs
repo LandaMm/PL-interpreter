@@ -3,7 +3,7 @@ use pl_ast::{AssignmentOperator, BinaryOperator, Node};
 use crate::{
     macros::bail,
     values::{DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
-    Environment,
+    Environment, NativeFnValue,
 };
 
 use super::error::InterpreterError;
@@ -38,8 +38,42 @@ impl Interpreter {
             Node::AssignmentExpression(left, operator, right) => {
                 return Ok(self.eval_assignment_expression(left, operator, right, env)?)
             }
+            Node::CallExpression(callee, arguments) => {
+                return Ok(self.eval_call_expression(callee, arguments, env)?)
+            }
             node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
         }
+    }
+
+    fn eval_call_expression(
+        &self,
+        callee: Box<Node>,
+        arguments: Vec<Box<Node>>,
+        env: &mut Environment,
+    ) -> Result<Box<dyn RuntimeValue>, InterpreterError> {
+        let mut args: Vec<Box<dyn RuntimeValue>> = vec![];
+        for arg in arguments {
+            let value = self.evaluate(arg, env)?;
+            args.push(value);
+        }
+
+        let fn_callee = self.evaluate(callee, env)?;
+
+        if fn_callee.kind() != ValueType::NativeFn {
+            bail!(InterpreterError::InvalidFunctionCallee(fn_callee))
+        }
+
+        let fn_callee_clone = dyn_clone::clone_box(&*fn_callee);
+
+        let native_fn = match fn_callee.into_any().downcast::<NativeFnValue>() {
+            Ok(native_fn) => native_fn,
+            Err(_) => bail!(InterpreterError::UnsupportedValue(fn_callee_clone)),
+        };
+
+        let function_call = native_fn.call.borrow();
+        let result = function_call(args, env);
+
+        Ok(result)
     }
 
     fn eval_assignment_expression(
