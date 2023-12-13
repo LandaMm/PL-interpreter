@@ -1,30 +1,52 @@
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::{
+    fmt,
+    sync::{Arc, Mutex},
+};
 
-use crate::{Environment, RuntimeValue, ValueType};
+use crate::{RuntimeValue, ValueType};
 
-pub struct NativeFnValue {
-    kind: ValueType,
-    pub call:
-        Rc<RefCell<dyn Fn(Vec<Box<dyn RuntimeValue>>, &Environment) -> Box<dyn RuntimeValue>>>,
+pub type ClosureType = Arc<
+    Mutex<
+        dyn Fn(Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn RuntimeValue>>>
+            + Send
+            + Sync,
+    >,
+>;
+
+#[derive(Clone)]
+pub struct WithFnCall<T> {
+    fc: T,
 }
 
-impl NativeFnValue {
-    pub fn new(
-        call: impl Fn(Vec<Box<dyn RuntimeValue>>, &Environment) -> Box<dyn RuntimeValue> + 'static,
-    ) -> Self {
-        Self {
-            kind: ValueType::NativeFn,
-            call: Rc::new(RefCell::new(call)),
-        }
+impl WithFnCall<ClosureType> {
+    pub fn new(fc: ClosureType) -> Self {
+        Self { fc }
+    }
+
+    pub fn run(
+        &self,
+        args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>,
+    ) -> Arc<Mutex<Box<dyn RuntimeValue>>> {
+        (self.fc.lock().unwrap())(args)
     }
 }
 
-impl Clone for NativeFnValue {
-    fn clone(&self) -> Self {
+#[derive(Clone)]
+pub struct NativeFnValue {
+    kind: ValueType,
+    call: WithFnCall<ClosureType>,
+}
+
+impl NativeFnValue {
+    pub fn new(call: WithFnCall<ClosureType>) -> Self {
         Self {
-            kind: self.kind.clone(),
-            call: self.call.clone(),
+            kind: ValueType::NativeFn,
+            call,
         }
+    }
+
+    pub fn callee(&self) -> WithFnCall<ClosureType> {
+        self.call.clone()
     }
 }
 
@@ -41,7 +63,7 @@ impl RuntimeValue for NativeFnValue {
         self.kind
     }
 
-    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
-        self
+    fn into_any(&self) -> Box<dyn std::any::Any> {
+        Box::new(dyn_clone::clone(self))
     }
 }

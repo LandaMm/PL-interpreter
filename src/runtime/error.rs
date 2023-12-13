@@ -1,19 +1,23 @@
+use std::sync::{Arc, Mutex};
+
 use pl_ast::{BinaryOperator, Node};
 
-use crate::values::RuntimeValue;
+use crate::{values::RuntimeValue, EnvironmentId};
 
 #[derive(Debug)]
 pub enum InterpreterError {
     UnsupportedNode(Box<Node>),
     UnsupportedOperator(BinaryOperator),
-    UnsupportedValue(Box<dyn RuntimeValue>),
+    UnsupportedValue(Arc<Mutex<Box<dyn RuntimeValue>>>),
     UnexpectedNode(Box<Node>),
     ValueCastError(Box<dyn RuntimeValue>, String),
     VariableDeclarationExist(String),
     UnresolvedVariable(String),
     ReassignConstant(String),
     InvalidAssignFactor(Box<Node>),
-    InvalidFunctionCallee(Box<dyn RuntimeValue>),
+    InvalidFunctionCallee(Arc<Mutex<Box<dyn RuntimeValue>>>),
+    InvalidFunctionParameter(Box<Node>),
+    InvalidFunctionEnvironment(EnvironmentId),
 }
 
 impl std::fmt::Display for InterpreterError {
@@ -63,6 +67,16 @@ impl std::fmt::Display for InterpreterError {
             }
             InterpreterError::InvalidFunctionCallee(value) => {
                 write!(f, "Invalid function callee: {value:?}")
+            }
+            InterpreterError::InvalidFunctionParameter(parameter) => {
+                write!(f, "Invalid parameter provided in function: {parameter:?}")
+            }
+            InterpreterError::InvalidFunctionEnvironment(env_id) => {
+                write!(
+                    f,
+                    "Environment (scope) for function is not found with given id: {:?}",
+                    env_id
+                )
             }
         }
     }

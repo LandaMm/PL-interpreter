@@ -16,3 +16,4 @@ path = "src/bin.rs"
 [dependencies]
 pl_ast = { path = "../PL" }
 dyn-clone = "1.0.16"
+lazy_static = "1.4.0"

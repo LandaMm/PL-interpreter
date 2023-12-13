@@ -11,8 +11,8 @@ impl RuntimeValue for DecimalValue {
         self.kind
     }
 
-    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
-        self
+    fn into_any(&self) -> Box<dyn std::any::Any> {
+        Box::new(dyn_clone::clone(self))
     }
 }
 
