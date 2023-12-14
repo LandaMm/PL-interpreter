@@ -33,14 +33,16 @@ impl WithFnCall<ClosureType> {
 
 #[derive(Clone)]
 pub struct NativeFnValue {
+    pub name: String,
     kind: ValueType,
     call: WithFnCall<ClosureType>,
 }
 
 impl NativeFnValue {
-    pub fn new(call: WithFnCall<ClosureType>) -> Self {
+    pub fn new(name: String, call: WithFnCall<ClosureType>) -> Self {
         Self {
             kind: ValueType::NativeFn,
+            name,
             call,
         }
     }

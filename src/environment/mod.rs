@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{macros::bail, InterpreterError, RuntimeValue, SCOPE_STATE};
+use crate::{macros::bail, InterpreterError, RuntimeValue};
 
 pub type EnvironmentId = u64;
 
@@ -65,8 +65,7 @@ impl ScopeState {
         value: Arc<Mutex<Box<dyn RuntimeValue>>>,
         env_id: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        let scope = self.get_scope_mut(env_id).unwrap();
-        let env_id = scope.resolve_mut(variable_name.clone())?;
+        let env_id = self.resolve_mut(env_id, variable_name.clone())?;
         let scope = self.get_scope_mut(env_id).unwrap();
 
         if scope.constants.contains(&variable_name) {
@@ -80,6 +79,26 @@ impl ScopeState {
 
         let value = Arc::clone(scope.variables.get(&variable_name).unwrap());
         Ok(value)
+    }
+
+    pub fn resolve_mut(
+        &mut self,
+        env_id: EnvironmentId,
+        variable_name: String,
+    ) -> Result<EnvironmentId, InterpreterError> {
+        let scope = self.get_scope(env_id).unwrap();
+        if scope.variables.contains_key(&variable_name) {
+            return Ok(scope.id);
+        }
+
+        if scope.parent.is_none() {
+            bail!(InterpreterError::UnresolvedVariable(variable_name))
+        }
+
+        // let scope_state = SCOPE_STATE.lock().unwrap();
+        let parent_scope = self.get_scope(scope.parent.unwrap()).unwrap();
+        let env_id = parent_scope.resolve(variable_name, self)?;
+        Ok(env_id)
     }
 }
 
@@ -166,24 +185,24 @@ impl Environment {
         Ok(value)
     }
 
-    pub fn resolve_mut(
-        &mut self,
-        variable_name: String,
-    ) -> Result<EnvironmentId, InterpreterError> {
-        if self.variables.contains_key(&variable_name) {
-            return Ok(self.id);
-        }
+    // pub fn resolve_mut(
+    //     &mut self,
+    //     variable_name: String,
+    // ) -> Result<EnvironmentId, InterpreterError> {
+    //     if self.variables.contains_key(&variable_name) {
+    //         return Ok(self.id);
+    //     }
 
-        if self.parent.is_none() {
-            bail!(InterpreterError::UnresolvedVariable(variable_name))
-        }
+    //     if self.parent.is_none() {
+    //         bail!(InterpreterError::UnresolvedVariable(variable_name))
+    //     }
 
-        let mut scope_state = SCOPE_STATE.lock().unwrap();
-        let parent_scope = scope_state.get_scope_mut(self.parent.unwrap()).unwrap();
-        let env_id = parent_scope.resolve_mut(variable_name)?;
-        drop(scope_state);
-        Ok(env_id)
-    }
+    //     let mut scope_state = SCOPE_STATE.lock().unwrap();
+    //     let parent_scope = scope_state.get_scope_mut(self.parent.unwrap()).unwrap();
+    //     let env_id = parent_scope.resolve_mut(variable_name)?;
+    //     drop(scope_state);
+    //     Ok(env_id)
+    // }
 
     pub fn resolve(
         &self,
@@ -201,7 +220,6 @@ impl Environment {
         // let scope_state = SCOPE_STATE.lock().unwrap();
         let parent_scope = scope_state.get_scope(self.parent.unwrap()).unwrap();
         let env_id = parent_scope.resolve(variable_name, scope_state)?;
-        drop(scope_state);
         Ok(env_id)
     }
 }

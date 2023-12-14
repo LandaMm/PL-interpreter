@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use pl_ast::{BinaryOperator, Node};
 
-use crate::{values::RuntimeValue, EnvironmentId};
+use crate::{stringify, values::RuntimeValue, EnvironmentId};
 
 #[derive(Debug)]
 pub enum InterpreterError {
@@ -18,6 +18,7 @@ pub enum InterpreterError {
     InvalidFunctionCallee(Arc<Mutex<Box<dyn RuntimeValue>>>),
     InvalidFunctionParameter(Box<Node>),
     InvalidFunctionEnvironment(EnvironmentId),
+    InvalidCondition(Box<dyn RuntimeValue>),
 }
 
 impl std::fmt::Display for InterpreterError {
@@ -76,6 +77,13 @@ impl std::fmt::Display for InterpreterError {
                     f,
                     "Environment (scope) for function is not found with given id: {:?}",
                     env_id
+                )
+            }
+            InterpreterError::InvalidCondition(condition) => {
+                write!(
+                    f,
+                    "Invalid condition: {:?}",
+                    stringify(dyn_clone::clone_box(&**condition))
                 )
             }
         }

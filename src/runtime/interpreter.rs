@@ -7,9 +7,11 @@ use lazy_static::lazy_static;
 use pl_ast::{AssignmentOperator, BinaryOperator, Node};
 
 use crate::{
+    cast_value,
     macros::bail,
+    stringify,
     values::{DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
-    EnvironmentId, FunctionParameter, FunctionValue, NativeFnValue, ScopeState,
+    BoolValue, EnvironmentId, FunctionParameter, FunctionValue, NativeFnValue, ScopeState,
 };
 
 use super::error::InterpreterError;
@@ -63,8 +65,37 @@ impl Interpreter {
             Node::BlockStatement(statements) => {
                 return Ok(self.eval_block_statement(statements, env)?)
             }
+            Node::IfStatement(condition, body, alternate) => {
+                return Ok(self.eval_if_statement(condition, body, alternate, env))?
+            }
             node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
         }
+    }
+
+    fn eval_if_statement(
+        &mut self,
+        condition: Box<Node>,
+        body: Box<Node>,
+        alternate: Option<Box<Node>>,
+        env_id: EnvironmentId,
+    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
+        let condition = self.evaluate(condition, env_id)?;
+        let condition = condition.lock().unwrap();
+        if condition.kind() != ValueType::Boolean {
+            bail!(InterpreterError::InvalidCondition(dyn_clone::clone_box(
+                &**condition
+            )))
+        }
+
+        let boolean = cast_value::<BoolValue>(&condition).unwrap();
+        if boolean.value() {
+            let value = self.evaluate(body, env_id)?;
+            return Ok(value);
+        } else if let Some(alternate) = alternate {
+            let value = self.evaluate(alternate, env_id)?;
+            return Ok(value);
+        }
+        return Ok(Arc::new(Mutex::new(Box::new(NullValue::default()))));
     }
 
     fn eval_block_statement(
@@ -138,50 +169,140 @@ impl Interpreter {
         }
         let fn_callee = self.evaluate(callee, env)?;
 
-        let fn_callee_box = fn_callee.lock().unwrap();
+        let fn_calle_c = fn_callee.clone();
+        let fn_callee_box = fn_calle_c.lock().unwrap();
         let result = match fn_callee_box.kind() {
             ValueType::NativeFn => {
                 let native_fn = match fn_callee_box.into_any().downcast::<NativeFnValue>() {
                     Ok(native_fn) => native_fn,
                     Err(_) => bail!(InterpreterError::UnsupportedValue(fn_callee.clone())),
                 };
+                let native_fn_c = dyn_clone::clone_box(&*native_fn);
+                drop(native_fn);
+                drop(fn_callee_box);
+                drop(fn_callee);
 
-                native_fn.callee().run(args)
+                native_fn_c.callee().run(args.clone())
             }
             ValueType::Function => {
                 let func = match fn_callee_box.into_any().downcast::<FunctionValue>() {
                     Ok(func) => func,
                     Err(_) => bail!(InterpreterError::UnsupportedValue(fn_callee.clone())),
                 };
+                let func_c = dyn_clone::clone_box(&*func);
+                drop(func);
+                drop(fn_callee_box);
+                drop(fn_callee);
                 let mut scope_state = SCOPE_STATE.lock().unwrap();
-                let env_id = scope_state.create_environment(Some(func.declaration_env));
+                let env_id = scope_state.create_environment(Some(func_c.declaration_env));
                 let scope = scope_state.get_scope_mut(env_id).unwrap();
-                for (index, parameter) in func.parameters.iter().enumerate() {
+                for (index, parameter) in func_c.parameters.iter().enumerate() {
                     let value = args.get(index).unwrap().clone();
                     scope.declare_variable(parameter.name.clone(), value, true)?;
                 }
                 drop(scope_state);
-                self.evaluate(func.body, env_id)?
+                self.evaluate(func_c.body, env_id)?
             }
             _ => bail!(InterpreterError::InvalidFunctionCallee(fn_callee.clone())),
         };
         Ok(result)
     }
 
+    fn convert_value_to_node(&self, value: Box<dyn RuntimeValue>) -> Box<Node> {
+        let node = match value.kind() {
+            ValueType::Boolean => {
+                let boolean = cast_value::<BoolValue>(&value).unwrap();
+                Node::Identifier(if boolean.value() {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                })
+            }
+            ValueType::Decimal => {
+                let decimal = cast_value::<DecimalValue>(&value).unwrap();
+                Node::DecimalLiteral(decimal.value())
+            }
+            ValueType::Integer => {
+                let integer = cast_value::<IntegerValue>(&value).unwrap();
+                Node::IntegerLiteral(integer.value().abs() as usize)
+            }
+            ValueType::Null => Node::Identifier("null".to_string()),
+            ValueType::Function | ValueType::NativeFn => Node::Identifier(stringify(value)),
+        };
+        Box::new(node)
+    }
+
     fn eval_assignment_expression(
         &mut self,
         left: Box<Node>,
-        // TODO: add support for operator
         operator: AssignmentOperator,
         right: Box<Node>,
         env: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         if let Node::Identifier(variable_name) = *left {
-            // TODO: somehow drop SCOPE_STATE
             let scope_c = SCOPE_STATE.clone();
             let mut scope_state = scope_c.lock().unwrap();
-            let right = self.evaluate(right, env)?;
-            let value = scope_state.assign_variable(variable_name, right, env)?;
+            let value = match operator {
+                AssignmentOperator::Equals => {
+                    let right = self.evaluate(right, env)?;
+                    scope_state.assign_variable(variable_name.clone(), right, env)?
+                }
+                AssignmentOperator::Addition => {
+                    let scope = scope_state.get_scope(env).unwrap();
+                    let previous_value =
+                        scope.lookup_variable(variable_name.clone(), &scope_state)?;
+                    let left = self.convert_value_to_node(dyn_clone::clone_box(
+                        &**previous_value.lock().unwrap(),
+                    ));
+                    let binary = Node::BinaryExpression(left, BinaryOperator::Plus, right);
+                    let value = self.evaluate(Box::new(binary), env)?;
+                    scope_state.assign_variable(variable_name.clone(), value, env)?
+                }
+                AssignmentOperator::Division => {
+                    let scope = scope_state.get_scope(env).unwrap();
+                    let previous_value =
+                        scope.lookup_variable(variable_name.clone(), &scope_state)?;
+                    let left = self.convert_value_to_node(dyn_clone::clone_box(
+                        &**previous_value.lock().unwrap(),
+                    ));
+                    let binary = Node::BinaryExpression(left, BinaryOperator::Divide, right);
+                    let value = self.evaluate(Box::new(binary), env)?;
+                    scope_state.assign_variable(variable_name.clone(), value, env)?
+                }
+                AssignmentOperator::Modulation => {
+                    let scope = scope_state.get_scope(env).unwrap();
+                    let previous_value =
+                        scope.lookup_variable(variable_name.clone(), &scope_state)?;
+                    let left = self.convert_value_to_node(dyn_clone::clone_box(
+                        &**previous_value.lock().unwrap(),
+                    ));
+                    let binary = Node::BinaryExpression(left, BinaryOperator::Modulo, right);
+                    let value = self.evaluate(Box::new(binary), env)?;
+                    scope_state.assign_variable(variable_name.clone(), value, env)?
+                }
+                AssignmentOperator::Subtraction => {
+                    let scope = scope_state.get_scope(env).unwrap();
+                    let previous_value =
+                        scope.lookup_variable(variable_name.clone(), &scope_state)?;
+                    let left = self.convert_value_to_node(dyn_clone::clone_box(
+                        &**previous_value.lock().unwrap(),
+                    ));
+                    let binary = Node::BinaryExpression(left, BinaryOperator::Minus, right);
+                    let value = self.evaluate(Box::new(binary), env)?;
+                    scope_state.assign_variable(variable_name.clone(), value, env)?
+                }
+                AssignmentOperator::Multiplication => {
+                    let scope = scope_state.get_scope(env).unwrap();
+                    let previous_value =
+                        scope.lookup_variable(variable_name.clone(), &scope_state)?;
+                    let left = self.convert_value_to_node(dyn_clone::clone_box(
+                        &**previous_value.lock().unwrap(),
+                    ));
+                    let binary = Node::BinaryExpression(left, BinaryOperator::Multiply, right);
+                    let value = self.evaluate(Box::new(binary), env)?;
+                    scope_state.assign_variable(variable_name.clone(), value, env)?
+                }
+            };
             drop(scope_state);
             return Ok(value);
         }
@@ -341,7 +462,26 @@ impl Interpreter {
                     left % right,
                 )))))
             }
-            _ => bail!(InterpreterError::UnsupportedOperator(operator)),
+            BinaryOperator::GreaterThan => {
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left > right,
+                )))))
+            }
+            BinaryOperator::LessThan => {
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left < right,
+                )))))
+            }
+            BinaryOperator::NotEquals => {
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left != right,
+                )))))
+            }
+            BinaryOperator::IsEquals => {
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left == right,
+                )))))
+            }
         }
     }
 
@@ -354,13 +494,8 @@ impl Interpreter {
     where
         T: Into<isize> + Debug,
     {
-        println!("eval-integers-before: {:?} {:?}", left, right);
-        println!("operator: {:?}", operator);
-
         let left: isize = left.into();
         let right: isize = right.into();
-
-        println!("eval-integers: {} {}", left, right);
 
         match operator {
             BinaryOperator::Plus => {
@@ -388,7 +523,26 @@ impl Interpreter {
                     left % right,
                 )))))
             }
-            _ => bail!(InterpreterError::UnsupportedOperator(operator)),
+            BinaryOperator::GreaterThan => {
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left > right,
+                )))))
+            }
+            BinaryOperator::LessThan => {
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left < right,
+                )))))
+            }
+            BinaryOperator::NotEquals => {
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left != right,
+                )))))
+            }
+            BinaryOperator::IsEquals => {
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left == right,
+                )))))
+            }
         }
     }
 
@@ -408,7 +562,6 @@ impl Interpreter {
             return Ok(self.eval_decimals(left.value(), right.value(), operator)?);
         }
         if left.kind() == ValueType::Integer && right.kind() == ValueType::Integer {
-            println!("eval-numeric: {:?}, {:?}", left, right);
             let left = self.get_integer_value(dyn_clone::clone_box(&**left))?;
             let right = self.get_integer_value(dyn_clone::clone_box(&**right))?;
 
