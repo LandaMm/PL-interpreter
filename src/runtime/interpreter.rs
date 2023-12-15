@@ -21,71 +21,98 @@ lazy_static! {
     pub static ref SCOPE_STATE: Arc<Mutex<ScopeState>> = Arc::new(Mutex::new(ScopeState::new()));
 }
 
-pub struct Interpreter;
+pub struct Interpreter {
+    stack: VecDeque<(Box<Node>, EnvironmentId)>,
+}
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self
+        Self {
+            stack: VecDeque::new(),
+        }
     }
 
-    pub fn evaluate(
+    pub fn run(
+        &mut self,
+        node: Box<Node>,
+        env: EnvironmentId,
+        invert: bool,
+    ) -> Result<(), InterpreterError> {
+        match *node {
+            Node::Program(statements) | Node::BlockStatement(statements) => {
+                if invert {
+                    for statement in statements.into_iter().rev() {
+                        self.stack.push_front((statement, env));
+                    }
+                } else {
+                    for statement in statements {
+                        self.stack.push_back((statement, env));
+                    }
+                };
+            }
+            Node::IfStatement(condition, body, alternate) => {
+                self.eval_if_statement(condition, body, alternate, env)?;
+            }
+            Node::CallExpression(calle, args) => {
+                self.eval_call_expression(calle, args, env)?;
+            }
+            // TODO: Add support for ForInStatement
+            node => {
+                self.resolve(Box::new(node), env)?;
+            }
+        }
+
+        self.execute()?;
+
+        Ok(())
+    }
+
+    pub fn execute(&mut self) -> Result<(), InterpreterError> {
+        while let Some((current_node, current_env)) = self.stack.pop_front() {
+            match *current_node {
+                Node::CallExpression(calle, args) => {
+                    self.eval_call_expression(calle, args, current_env)?;
+                }
+                Node::IfStatement(condition, body, alternate) => {
+                    self.eval_if_statement(condition, body, alternate, current_env)?;
+                }
+                node => {
+                    self.resolve(Box::new(node), current_env)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn resolve(
         &mut self,
         node: Box<Node>,
         env: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        let mut stack = Box::new(VecDeque::new());
-        stack.push_back((node, env));
-
-        let mut last_evaluated: Arc<Mutex<Box<dyn RuntimeValue>>> =
-            Arc::new(Mutex::new(Box::new(NullValue::default())));
-
-        while let Some((current_node, current_env)) = stack.pop_back() {
-            let value: Option<Arc<Mutex<Box<dyn RuntimeValue>>>> = match *current_node {
-                Node::IntegerLiteral(value) => Some(Arc::new(Mutex::new(Box::new(
-                    IntegerValue::from(value as isize),
-                )))),
-                Node::DecimalLiteral(value) => {
-                    Some(Arc::new(Mutex::new(Box::new(DecimalValue::from(value)))))
-                }
-                Node::NullLiteral() => Some(Arc::new(Mutex::new(Box::new(NullValue::default())))),
-                Node::Program(program) => {
-                    for statement in program.into_iter().rev() {
-                        stack.push_back((statement, current_env));
-                    }
-                    None
-                }
-                Node::BinaryExpression(..) => {
-                    Some(self.eval_binary_expression(current_node, current_env)?)
-                }
-                Node::Identifier(identifier) => {
-                    Some(self.eval_identifier(identifier, current_env)?)
-                }
-                Node::VariableDeclaration(variable_name, value, is_constant) => Some(
-                    self.eval_variable_declaration(variable_name, value, is_constant, current_env)?,
-                ),
-                Node::AssignmentExpression(left, operator, right) => {
-                    Some(self.eval_assignment_expression(left, operator, right, current_env)?)
-                }
-                Node::CallExpression(callee, arguments) => {
-                    Some(self.eval_call_expression(callee, arguments, current_env)?)
-                }
-                Node::FunctionDeclaration(name, parameters, body) => {
-                    Some(self.eval_function_declaration(name, parameters, body, current_env)?)
-                }
-                Node::BlockStatement(statements) => {
-                    Some(self.eval_block_statement(statements, current_env)?)
-                }
-                Node::IfStatement(condition, body, alternate) => {
-                    Some(self.eval_if_statement(condition, body, alternate, current_env)?)
-                }
-                node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
-            };
-            if let Some(value) = value {
-                last_evaluated = value;
+        let value: Arc<Mutex<Box<dyn RuntimeValue>>> = match *node {
+            Node::IntegerLiteral(value) => {
+                Arc::new(Mutex::new(Box::new(IntegerValue::from(value as isize))))
             }
-        }
+            Node::DecimalLiteral(value) => {
+                Arc::new(Mutex::new(Box::new(DecimalValue::from(value))))
+            }
+            Node::BinaryExpression(..) => self.eval_binary_expression(node, env)?,
+            Node::Identifier(identifier) => self.eval_identifier(identifier, env)?,
+            Node::VariableDeclaration(variable_name, value, is_constant) => {
+                self.eval_variable_declaration(variable_name, value, is_constant, env)?
+            }
+            Node::AssignmentExpression(left, operator, right) => {
+                self.eval_assignment_expression(left, operator, right, env)?
+            }
+            Node::FunctionDeclaration(name, parameters, body) => {
+                self.eval_function_declaration(name, parameters, body, env)?
+            }
+            Node::ReturnStatement(..) => bail!(InterpreterError::UnexpectedNode(node)),
+            node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
+        };
 
-        Ok(last_evaluated)
+        Ok(value)
     }
 
     fn eval_if_statement(
@@ -95,7 +122,7 @@ impl Interpreter {
         alternate: Option<Box<Node>>,
         env_id: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        let condition = self.evaluate(condition, env_id)?;
+        let condition = self.resolve(condition, env_id)?;
         let condition = condition.lock().unwrap();
         if condition.kind() != ValueType::Boolean {
             bail!(InterpreterError::InvalidCondition(dyn_clone::clone_box(
@@ -105,26 +132,11 @@ impl Interpreter {
 
         let boolean = cast_value::<BoolValue>(&condition).unwrap();
         if boolean.value() {
-            let value = self.evaluate(body, env_id)?;
-            return Ok(value);
+            self.run(body, env_id, true)?;
         } else if let Some(alternate) = alternate {
-            let value = self.evaluate(alternate, env_id)?;
-            return Ok(value);
+            self.run(alternate, env_id, true)?;
         }
         return Ok(Arc::new(Mutex::new(Box::new(NullValue::default()))));
-    }
-
-    fn eval_block_statement(
-        &mut self,
-        statements: Vec<Box<Node>>,
-        env: EnvironmentId,
-    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        let mut last_evaluated: Arc<Mutex<Box<dyn RuntimeValue>>> =
-            Arc::new(Mutex::new(Box::new(NullValue::default())));
-        for stmt in statements {
-            last_evaluated = self.evaluate(stmt, env)?;
-        }
-        Ok(last_evaluated)
     }
 
     fn eval_function_declaration(
@@ -149,7 +161,7 @@ impl Interpreter {
                     if let Node::Identifier(value) = *left {
                         parameters.push(FunctionParameter::new(
                             value,
-                            Some(self.evaluate(right, env)?),
+                            Some(self.resolve(right, env)?),
                         ));
                     }
                     bail!(InterpreterError::InvalidAssignFactor(left_clone))
@@ -180,14 +192,14 @@ impl Interpreter {
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         let mut args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>> = vec![];
         for arg in arguments {
-            let value = self.evaluate(arg, env)?;
+            let value = self.resolve(arg, env)?;
             args.push(value);
         }
-        let fn_callee = self.evaluate(callee, env)?;
+        let fn_callee = self.resolve(callee, env)?;
 
         let fn_calle_c = fn_callee.clone();
         let fn_callee_box = fn_calle_c.lock().unwrap();
-        let result = match fn_callee_box.kind() {
+        let result: Arc<Mutex<Box<dyn RuntimeValue>>> = match fn_callee_box.kind() {
             ValueType::NativeFn => {
                 let native_fn = match fn_callee_box.into_any().downcast::<NativeFnValue>() {
                     Ok(native_fn) => native_fn,
@@ -217,7 +229,8 @@ impl Interpreter {
                     scope.declare_variable(parameter.name.clone(), value, true)?;
                 }
                 drop(scope_state);
-                self.evaluate(func_c.body, env_id)?
+                self.run(func_c.body, env_id, true)?;
+                Arc::new(Mutex::new(Box::new(NullValue::default())))
             }
             _ => bail!(InterpreterError::InvalidFunctionCallee(fn_callee.clone())),
         };
@@ -260,7 +273,7 @@ impl Interpreter {
             let mut scope_state = scope_c.lock().unwrap();
             let value = match operator {
                 AssignmentOperator::Equals => {
-                    let right = self.evaluate(right, env)?;
+                    let right = self.resolve(right, env)?;
                     scope_state.assign_variable(variable_name.clone(), right, env)?
                 }
                 AssignmentOperator::Addition => {
@@ -271,7 +284,7 @@ impl Interpreter {
                         &**previous_value.lock().unwrap(),
                     ));
                     let binary = Node::BinaryExpression(left, BinaryOperator::Plus, right);
-                    let value = self.evaluate(Box::new(binary), env)?;
+                    let value = self.resolve(Box::new(binary), env)?;
                     scope_state.assign_variable(variable_name.clone(), value, env)?
                 }
                 AssignmentOperator::Division => {
@@ -282,7 +295,7 @@ impl Interpreter {
                         &**previous_value.lock().unwrap(),
                     ));
                     let binary = Node::BinaryExpression(left, BinaryOperator::Divide, right);
-                    let value = self.evaluate(Box::new(binary), env)?;
+                    let value = self.resolve(Box::new(binary), env)?;
                     scope_state.assign_variable(variable_name.clone(), value, env)?
                 }
                 AssignmentOperator::Modulation => {
@@ -293,7 +306,7 @@ impl Interpreter {
                         &**previous_value.lock().unwrap(),
                     ));
                     let binary = Node::BinaryExpression(left, BinaryOperator::Modulo, right);
-                    let value = self.evaluate(Box::new(binary), env)?;
+                    let value = self.resolve(Box::new(binary), env)?;
                     scope_state.assign_variable(variable_name.clone(), value, env)?
                 }
                 AssignmentOperator::Subtraction => {
@@ -304,7 +317,7 @@ impl Interpreter {
                         &**previous_value.lock().unwrap(),
                     ));
                     let binary = Node::BinaryExpression(left, BinaryOperator::Minus, right);
-                    let value = self.evaluate(Box::new(binary), env)?;
+                    let value = self.resolve(Box::new(binary), env)?;
                     scope_state.assign_variable(variable_name.clone(), value, env)?
                 }
                 AssignmentOperator::Multiplication => {
@@ -315,7 +328,7 @@ impl Interpreter {
                         &**previous_value.lock().unwrap(),
                     ));
                     let binary = Node::BinaryExpression(left, BinaryOperator::Multiply, right);
-                    let value = self.evaluate(Box::new(binary), env)?;
+                    let value = self.resolve(Box::new(binary), env)?;
                     scope_state.assign_variable(variable_name.clone(), value, env)?
                 }
             };
@@ -333,7 +346,7 @@ impl Interpreter {
         env: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         let value: Arc<Mutex<Box<dyn RuntimeValue>>> = match value {
-            Some(value) => self.evaluate(value, env)?,
+            Some(value) => self.resolve(value, env)?,
             None => Arc::new(Mutex::new(Box::new(NullValue::default()))),
         };
 
@@ -578,8 +591,8 @@ impl Interpreter {
         env: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         if let Node::BinaryExpression(left, operator, right) = *node {
-            let left = self.evaluate(left, env)?;
-            let right = self.evaluate(right, env)?;
+            let left = self.resolve(left, env)?;
+            let right = self.resolve(right, env)?;
 
             let left_kind = left.lock().unwrap().kind();
             let right_kind = right.lock().unwrap().kind();
