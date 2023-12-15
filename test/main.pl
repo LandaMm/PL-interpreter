@@ -11,7 +11,7 @@ fn on_loop(index) {
   print(index)
 }
 
-loop(on_loop, 0, 1000000)
+loop(on_loop, 0, 1000)
 
 # add()
 # print(i)

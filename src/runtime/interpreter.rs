@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     fmt::Debug,
     sync::{Arc, Mutex},
 };
@@ -32,44 +33,59 @@ impl Interpreter {
         node: Box<Node>,
         env: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        match *node {
-            Node::IntegerLiteral(value) => {
-                return Ok(Arc::new(Mutex::new(Box::new(IntegerValue::from(
-                    value as isize,
-                )))))
+        let mut stack = Box::new(VecDeque::new());
+        stack.push_back((node, env));
+
+        let mut last_evaluated: Arc<Mutex<Box<dyn RuntimeValue>>> =
+            Arc::new(Mutex::new(Box::new(NullValue::default())));
+
+        while let Some((current_node, current_env)) = stack.pop_back() {
+            let value: Option<Arc<Mutex<Box<dyn RuntimeValue>>>> = match *current_node {
+                Node::IntegerLiteral(value) => Some(Arc::new(Mutex::new(Box::new(
+                    IntegerValue::from(value as isize),
+                )))),
+                Node::DecimalLiteral(value) => {
+                    Some(Arc::new(Mutex::new(Box::new(DecimalValue::from(value)))))
+                }
+                Node::NullLiteral() => Some(Arc::new(Mutex::new(Box::new(NullValue::default())))),
+                Node::Program(program) => {
+                    for statement in program.into_iter().rev() {
+                        stack.push_back((statement, current_env));
+                    }
+                    None
+                }
+                Node::BinaryExpression(..) => {
+                    Some(self.eval_binary_expression(current_node, current_env)?)
+                }
+                Node::Identifier(identifier) => {
+                    Some(self.eval_identifier(identifier, current_env)?)
+                }
+                Node::VariableDeclaration(variable_name, value, is_constant) => Some(
+                    self.eval_variable_declaration(variable_name, value, is_constant, current_env)?,
+                ),
+                Node::AssignmentExpression(left, operator, right) => {
+                    Some(self.eval_assignment_expression(left, operator, right, current_env)?)
+                }
+                Node::CallExpression(callee, arguments) => {
+                    Some(self.eval_call_expression(callee, arguments, current_env)?)
+                }
+                Node::FunctionDeclaration(name, parameters, body) => {
+                    Some(self.eval_function_declaration(name, parameters, body, current_env)?)
+                }
+                Node::BlockStatement(statements) => {
+                    Some(self.eval_block_statement(statements, current_env)?)
+                }
+                Node::IfStatement(condition, body, alternate) => {
+                    Some(self.eval_if_statement(condition, body, alternate, current_env)?)
+                }
+                node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
+            };
+            if let Some(value) = value {
+                last_evaluated = value;
             }
-            Node::DecimalLiteral(value) => {
-                return Ok(Arc::new(Mutex::new(Box::new(DecimalValue::from(value)))))
-            }
-            Node::NullLiteral() => return Ok(Arc::new(Mutex::new(Box::new(NullValue::default())))),
-            Node::Program(program) => return Ok(self.eval_program(program, env)?),
-            Node::BinaryExpression(..) => return Ok(self.eval_binary_expression(node, env)?),
-            Node::Identifier(identifier) => return Ok(self.eval_identifier(identifier, env)?),
-            Node::VariableDeclaration(variable_name, value, is_constant) => {
-                return Ok(self.eval_variable_declaration(
-                    variable_name,
-                    value,
-                    is_constant,
-                    env,
-                )?)
-            }
-            Node::AssignmentExpression(left, operator, right) => {
-                return Ok(self.eval_assignment_expression(left, operator, right, env)?)
-            }
-            Node::CallExpression(callee, arguments) => {
-                return Ok(self.eval_call_expression(callee, arguments, env)?)
-            }
-            Node::FunctionDeclaration(name, parameters, body) => {
-                return Ok(self.eval_function_declaration(name, parameters, body, env)?)
-            }
-            Node::BlockStatement(statements) => {
-                return Ok(self.eval_block_statement(statements, env)?)
-            }
-            Node::IfStatement(condition, body, alternate) => {
-                return Ok(self.eval_if_statement(condition, body, alternate, env))?
-            }
-            node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
         }
+
+        Ok(last_evaluated)
     }
 
     fn eval_if_statement(
@@ -347,29 +363,6 @@ impl Interpreter {
         let val = scope.lookup_variable(identifier, &scope_state)?;
         drop(scope_state);
         Ok(val)
-    }
-
-    fn eval_statements(
-        &mut self,
-        statements: Vec<Box<Node>>,
-        env: EnvironmentId,
-    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        let mut last_evaluated: Arc<Mutex<Box<dyn RuntimeValue>>> =
-            Arc::new(Mutex::new(Box::new(NullValue::default())));
-
-        for statement in statements {
-            last_evaluated = self.evaluate(statement, env)?;
-        }
-
-        Ok(last_evaluated)
-    }
-
-    fn eval_program(
-        &mut self,
-        statements: Vec<Box<Node>>,
-        env: EnvironmentId,
-    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        return Ok(self.eval_statements(statements, env)?);
     }
 
     fn get_integer_value(

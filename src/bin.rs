@@ -7,7 +7,7 @@ fn main() {
     let source = fs::read_to_string("test/main.pl").unwrap();
     let mut parser = Parser::from_source(source);
     let ast = parser.produce_ast().unwrap();
-    let mut interpreter = Interpreter::new();
+    let mut interpreter = Box::new(Interpreter::new());
 
     let env_id = setup_environment();
 
