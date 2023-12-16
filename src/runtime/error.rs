@@ -1,13 +1,14 @@
 use std::sync::{Arc, Mutex};
 
-use pl_ast::{BinaryOperator, Node};
+use pl_ast::{BinaryOperator, Node, UnaryOperator};
 
 use crate::{stringify, values::RuntimeValue, EnvironmentId};
 
 #[derive(Debug)]
 pub enum InterpreterError {
     UnsupportedNode(Box<Node>),
-    UnsupportedOperator(BinaryOperator),
+    UnsupportedBinaryOperator(BinaryOperator),
+    UnsupportedUnaryOperator(UnaryOperator),
     UnsupportedValue(Arc<Mutex<Box<dyn RuntimeValue>>>),
     UnexpectedNode(Box<Node>),
     ValueCastError(Box<dyn RuntimeValue>, String),
@@ -37,7 +38,14 @@ impl std::fmt::Display for InterpreterError {
             InterpreterError::ValueCastError(node, cast) => {
                 write!(f, "Failed to cast node to {}: {:?}", cast, node)
             }
-            InterpreterError::UnsupportedOperator(operator) => {
+            InterpreterError::UnsupportedBinaryOperator(operator) => {
+                write!(
+                    f,
+                    "This operator is not supported by interpreter yet: {:?}",
+                    operator
+                )
+            }
+            InterpreterError::UnsupportedUnaryOperator(operator) => {
                 write!(
                     f,
                     "This operator is not supported by interpreter yet: {:?}",

@@ -5,7 +5,7 @@ use std::{
 };
 
 use lazy_static::lazy_static;
-use pl_ast::{AssignmentOperator, BinaryOperator, Node};
+use pl_ast::{AssignmentOperator, BinaryOperator, Node, UnaryOperator};
 
 use crate::{
     cast_value,
@@ -108,11 +108,54 @@ impl Interpreter {
             Node::FunctionDeclaration(name, parameters, body) => {
                 self.eval_function_declaration(name, parameters, body, env)?
             }
+            Node::UnaryExpression(expression, operator) => {
+                self.eval_unary_expression(expression, operator, env)?
+            }
             Node::ReturnStatement(..) => bail!(InterpreterError::UnexpectedNode(node)),
             node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
         };
 
         Ok(value)
+    }
+
+    fn eval_unary_expression(
+        &mut self,
+        expression: Box<Node>,
+        operator: UnaryOperator,
+        env: EnvironmentId,
+    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
+        let target = self.resolve(expression.clone(), env)?;
+        let result: Arc<Mutex<Box<dyn RuntimeValue>>> = match operator {
+            UnaryOperator::Plus => target,
+            UnaryOperator::Minus => {
+                let target = target.lock().unwrap();
+                match target.kind() {
+                    ValueType::Decimal => {
+                        let value = cast_value::<DecimalValue>(&target).unwrap();
+                        Arc::new(Mutex::new(Box::new(DecimalValue::from(
+                            value.value() * -1.0,
+                        ))))
+                    }
+                    ValueType::Integer => {
+                        let value = cast_value::<IntegerValue>(&target).unwrap();
+                        Arc::new(Mutex::new(Box::new(IntegerValue::from(value.value() * -1))))
+                    }
+                    _ => bail!(InterpreterError::UnexpectedNode(expression)),
+                }
+            }
+            UnaryOperator::Negation => {
+                let target = target.lock().unwrap();
+                match target.kind() {
+                    ValueType::Boolean => {
+                        let value = cast_value::<BoolValue>(&target).unwrap();
+                        Arc::new(Mutex::new(Box::new(BoolValue::from(!value.value()))))
+                    }
+                    _ => bail!(InterpreterError::UnexpectedNode(expression)),
+                }
+            }
+            _ => bail!(InterpreterError::UnsupportedUnaryOperator(operator)),
+        };
+        Ok(result)
     }
 
     fn eval_if_statement(

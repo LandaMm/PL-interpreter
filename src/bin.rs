@@ -5,7 +5,7 @@ use pl_interpreter::{setup_environment, Interpreter};
 
 fn main() {
     thread::Builder::new()
-        .stack_size(128 * 1024 * 1024)
+        .stack_size(1024 * 1024)
         .spawn(|| {
             let source = fs::read_to_string("test/main.pl").unwrap();
             let mut parser = Parser::from_source(source);
