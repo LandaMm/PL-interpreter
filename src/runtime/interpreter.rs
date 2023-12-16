@@ -5,7 +5,7 @@ use std::{
 };
 
 use lazy_static::lazy_static;
-use pl_ast::{AssignmentOperator, BinaryOperator, Node, UnaryOperator};
+use pl_ast::{AssignmentOperator, BinaryOperator, LogicalOperator, Node, UnaryOperator};
 
 use crate::{
     cast_value,
@@ -111,6 +111,27 @@ impl Interpreter {
             Node::UnaryExpression(expression, operator) => {
                 self.eval_unary_expression(expression, operator, env)?
             }
+            Node::LogicalExpression(left, operator, right) => {
+                self.eval_logical_expression(left, operator, right, env)?
+            }
+            Node::BlockStatement(statements) => {
+                let mut stack: VecDeque<Box<Node>> = VecDeque::new();
+                for statement in statements {
+                    stack.push_back(statement);
+                }
+                let mut result: Arc<Mutex<Box<dyn RuntimeValue>>> =
+                    Arc::new(Mutex::new(Box::new(NullValue::default())));
+                while let Some(statement) = stack.pop_front() {
+                    println!("statement: {statement:#?}");
+                    if let Node::ReturnStatement(value) = *statement {
+                        result = self.resolve(value, env)?;
+                    } else {
+                        self.run(statement, env, false)?;
+                    }
+                }
+                result
+            }
+            Node::CallExpression(calle, args) => self.eval_call_expression(calle, args, env)?,
             Node::ReturnStatement(..) => bail!(InterpreterError::UnexpectedNode(node)),
             node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
         };
@@ -272,7 +293,7 @@ impl Interpreter {
                     scope.declare_variable(parameter.name.clone(), value, true)?;
                 }
                 drop(scope_state);
-                self.run(func_c.body, env_id, true)?;
+                self.resolve(func_c.body, env_id)?;
                 Arc::new(Mutex::new(Box::new(NullValue::default())))
             }
             _ => bail!(InterpreterError::InvalidFunctionCallee(fn_callee.clone())),
@@ -296,12 +317,90 @@ impl Interpreter {
             }
             ValueType::Integer => {
                 let integer = cast_value::<IntegerValue>(&value).unwrap();
-                Node::IntegerLiteral(integer.value().abs() as usize)
+                if integer.value() < 0 {
+                    Node::UnaryExpression(
+                        Box::new(Node::IntegerLiteral(integer.value().abs() as usize)),
+                        UnaryOperator::Minus,
+                    )
+                } else {
+                    Node::IntegerLiteral(integer.value().abs() as usize)
+                }
             }
             ValueType::Null => Node::Identifier("null".to_string()),
             ValueType::Function | ValueType::NativeFn => Node::Identifier(stringify(value)),
         };
         Box::new(node)
+    }
+
+    fn eval_logical_expression(
+        &mut self,
+        left: Box<Node>,
+        operator: LogicalOperator,
+        right: Box<Node>,
+        env: EnvironmentId,
+    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
+        match operator {
+            LogicalOperator::And => {
+                let left = self.resolve(left, env)?;
+                let right = self.resolve(right, env)?;
+                let left_value = dyn_clone::clone_box(&**left.lock().unwrap());
+                let right_value = dyn_clone::clone_box(&**right.lock().unwrap());
+                if left_value.kind() != ValueType::Boolean {
+                    bail!(InterpreterError::InvalidValue(
+                        left_value,
+                        "boolean".to_string()
+                    ))
+                }
+                if left_value.kind() != ValueType::Boolean
+                    || right_value.kind() != ValueType::Boolean
+                {
+                    bail!(InterpreterError::InvalidValue(
+                        right_value,
+                        "boolean".to_string()
+                    ))
+                }
+                let left_bool = cast_value::<BoolValue>(&left_value).unwrap();
+                let right_bool = cast_value::<BoolValue>(&right_value).unwrap();
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left_bool.value() && right_bool.value(),
+                )))));
+            }
+            LogicalOperator::Or => {
+                let left = self.resolve(left, env)?;
+                let right = self.resolve(right, env)?;
+                let left_value = dyn_clone::clone_box(&**left.lock().unwrap());
+                let right_value = dyn_clone::clone_box(&**right.lock().unwrap());
+                if left_value.kind() != ValueType::Boolean {
+                    bail!(InterpreterError::InvalidValue(
+                        left_value,
+                        "boolean".to_string()
+                    ))
+                }
+                if left_value.kind() != ValueType::Boolean
+                    || right_value.kind() != ValueType::Boolean
+                {
+                    bail!(InterpreterError::InvalidValue(
+                        right_value,
+                        "boolean".to_string()
+                    ))
+                }
+                let left_bool = cast_value::<BoolValue>(&left_value).unwrap();
+                let right_bool = cast_value::<BoolValue>(&right_value).unwrap();
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left_bool.value() || right_bool.value(),
+                )))));
+            }
+        }
+    }
+
+    fn assign_variable(
+        &mut self,
+        name: String,
+        value: Arc<Mutex<Box<dyn RuntimeValue>>>,
+        env: EnvironmentId,
+    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
+        let mut scope_state = SCOPE_STATE.lock().unwrap();
+        Ok(scope_state.assign_variable(name, value, env)?)
     }
 
     fn eval_assignment_expression(
@@ -312,14 +411,13 @@ impl Interpreter {
         env: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         if let Node::Identifier(variable_name) = *left {
-            let scope_c = SCOPE_STATE.clone();
-            let mut scope_state = scope_c.lock().unwrap();
             let value = match operator {
                 AssignmentOperator::Equals => {
                     let right = self.resolve(right, env)?;
-                    scope_state.assign_variable(variable_name.clone(), right, env)?
+                    self.assign_variable(variable_name.clone(), right, env)?
                 }
                 AssignmentOperator::Addition => {
+                    let scope_state = SCOPE_STATE.lock().unwrap();
                     let scope = scope_state.get_scope(env).unwrap();
                     let previous_value =
                         scope.lookup_variable(variable_name.clone(), &scope_state)?;
@@ -328,9 +426,11 @@ impl Interpreter {
                     ));
                     let binary = Node::BinaryExpression(left, BinaryOperator::Plus, right);
                     let value = self.resolve(Box::new(binary), env)?;
-                    scope_state.assign_variable(variable_name.clone(), value, env)?
+                    drop(scope_state);
+                    self.assign_variable(variable_name.clone(), value, env)?
                 }
                 AssignmentOperator::Division => {
+                    let scope_state = SCOPE_STATE.lock().unwrap();
                     let scope = scope_state.get_scope(env).unwrap();
                     let previous_value =
                         scope.lookup_variable(variable_name.clone(), &scope_state)?;
@@ -339,9 +439,11 @@ impl Interpreter {
                     ));
                     let binary = Node::BinaryExpression(left, BinaryOperator::Divide, right);
                     let value = self.resolve(Box::new(binary), env)?;
-                    scope_state.assign_variable(variable_name.clone(), value, env)?
+                    drop(scope_state);
+                    self.assign_variable(variable_name.clone(), value, env)?
                 }
                 AssignmentOperator::Modulation => {
+                    let scope_state = SCOPE_STATE.lock().unwrap();
                     let scope = scope_state.get_scope(env).unwrap();
                     let previous_value =
                         scope.lookup_variable(variable_name.clone(), &scope_state)?;
@@ -350,9 +452,11 @@ impl Interpreter {
                     ));
                     let binary = Node::BinaryExpression(left, BinaryOperator::Modulo, right);
                     let value = self.resolve(Box::new(binary), env)?;
-                    scope_state.assign_variable(variable_name.clone(), value, env)?
+                    drop(scope_state);
+                    self.assign_variable(variable_name.clone(), value, env)?
                 }
                 AssignmentOperator::Subtraction => {
+                    let scope_state = SCOPE_STATE.lock().unwrap();
                     let scope = scope_state.get_scope(env).unwrap();
                     let previous_value =
                         scope.lookup_variable(variable_name.clone(), &scope_state)?;
@@ -361,9 +465,11 @@ impl Interpreter {
                     ));
                     let binary = Node::BinaryExpression(left, BinaryOperator::Minus, right);
                     let value = self.resolve(Box::new(binary), env)?;
-                    scope_state.assign_variable(variable_name.clone(), value, env)?
+                    drop(scope_state);
+                    self.assign_variable(variable_name.clone(), value, env)?
                 }
                 AssignmentOperator::Multiplication => {
+                    let scope_state = SCOPE_STATE.lock().unwrap();
                     let scope = scope_state.get_scope(env).unwrap();
                     let previous_value =
                         scope.lookup_variable(variable_name.clone(), &scope_state)?;
@@ -372,10 +478,10 @@ impl Interpreter {
                     ));
                     let binary = Node::BinaryExpression(left, BinaryOperator::Multiply, right);
                     let value = self.resolve(Box::new(binary), env)?;
-                    scope_state.assign_variable(variable_name.clone(), value, env)?
+                    drop(scope_state);
+                    self.assign_variable(variable_name.clone(), value, env)?
                 }
             };
-            drop(scope_state);
             return Ok(value);
         }
         bail!(InterpreterError::InvalidAssignFactor(left))

@@ -20,6 +20,7 @@ pub enum InterpreterError {
     InvalidFunctionParameter(Box<Node>),
     InvalidFunctionEnvironment(EnvironmentId),
     InvalidCondition(Box<dyn RuntimeValue>),
+    InvalidValue(Box<dyn RuntimeValue>, String),
 }
 
 impl std::fmt::Display for InterpreterError {
@@ -92,6 +93,14 @@ impl std::fmt::Display for InterpreterError {
                     f,
                     "Invalid condition: {:?}",
                     stringify(dyn_clone::clone_box(&**condition))
+                )
+            }
+            Self::InvalidValue(value, expected) => {
+                write!(
+                    f,
+                    "Invalid value: {}, expected {}",
+                    stringify(dyn_clone::clone_box(&**value)),
+                    expected
                 )
             }
         }
