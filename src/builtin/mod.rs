@@ -1,15 +1,17 @@
 mod cast_value;
+mod math;
 mod print;
 mod stringify;
 mod time;
 
 use crate::{
-    BoolValue, ClosureType, Environment, EnvironmentId, NativeFnValue, NullValue, RuntimeValue,
-    WithFnCall, SCOPE_STATE,
+    BoolValue, ClosureType, Environment, EnvironmentId, NativeFnValue, NullValue, ObjectValue,
+    RuntimeValue, WithFnCall, SCOPE_STATE,
 };
 use std::sync::{Arc, Mutex};
 
 pub use cast_value::*;
+pub use math::*;
 pub use print::*;
 pub use stringify::*;
 pub use time::*;
@@ -65,6 +67,15 @@ pub fn setup_environment() -> EnvironmentId {
         .declare_variable(
             "time".to_string(),
             mk_native_fn("time".to_string(), Arc::new(Mutex::new(native_get_time))),
+            true,
+        )
+        .unwrap();
+
+    // native math object
+    environment
+        .declare_variable(
+            "math".to_string(),
+            mk_runtime_value(Box::new(ObjectValue::from(get_math()))),
             true,
         )
         .unwrap();

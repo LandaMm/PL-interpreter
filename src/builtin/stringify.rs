@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Formatter},
+};
 
 use crate::{
     ArrayValue, BoolValue, DecimalValue, FunctionValue, IntegerValue, NativeFnValue, ObjectValue,
@@ -6,6 +9,26 @@ use crate::{
 };
 
 use super::cast_value;
+
+struct DebugHashMap<'a>(&'a HashMap<String, String>);
+
+impl<'a> Debug for DebugHashMap<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut debug_map = f.debug_map();
+        for (key, value) in self.0 {
+            debug_map.entry(&key, &DebugValue(&value));
+        }
+        debug_map.finish()
+    }
+}
+
+struct DebugValue<'a>(&'a str);
+
+impl<'a> Debug for DebugValue<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
 
 pub fn stringify(value: Box<dyn RuntimeValue>) -> String {
     match value.kind() {
@@ -74,7 +97,8 @@ pub fn stringify(value: Box<dyn RuntimeValue>) -> String {
                     stringify(dyn_clone::clone_box(&**value.lock().unwrap())),
                 );
             }
-            format!("{:#?}", map)
+
+            format!("{:#?}", DebugHashMap(&map))
         }
     }
 }

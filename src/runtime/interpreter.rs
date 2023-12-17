@@ -13,7 +13,7 @@ use crate::{
     stringify,
     values::{DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
     ArrayValue, BoolValue, EnvironmentId, FunctionParameter, FunctionValue, NativeFnValue,
-    ScopeState, StringValue,
+    ObjectValue, ScopeState, StringValue,
 };
 
 use super::error::InterpreterError;
@@ -106,6 +106,9 @@ impl Interpreter {
             Node::FunctionDeclaration(name, parameters, body) => {
                 self.eval_function_declaration(name, parameters, body, env)?
             }
+            Node::MemberExpression(object, property, computed) => {
+                self.eval_member_expression(object, property, computed, env)?
+            }
             Node::UnaryExpression(expression, operator) => {
                 self.eval_unary_expression(expression, operator, env)?
             }
@@ -138,6 +141,52 @@ impl Interpreter {
         };
 
         Ok(value)
+    }
+
+    fn eval_member_expression(
+        &mut self,
+        object: Box<Node>,
+        property: Box<Node>,
+        computed: bool,
+        env: EnvironmentId,
+    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
+        let object = self.resolve(object, env)?;
+
+        let obj = object.clone();
+        let object_inner = obj.lock().unwrap();
+        // TODO: add support for primitive types methods, e.g. for string
+        // match object.kind() .... String => replace primitive with String class
+        if object_inner.kind() != ValueType::Object {
+            bail!(InterpreterError::UnsupportedValue(object))
+        }
+
+        let object = cast_value::<ObjectValue>(&object_inner).unwrap();
+
+        let property: Arc<Mutex<Box<dyn RuntimeValue>>> = if computed {
+            self.resolve(property, env)?
+        } else {
+            match *property {
+                Node::Identifier(value) => Arc::new(Mutex::new(Box::new(StringValue::from(value)))),
+                _ => bail!(InterpreterError::UnexpectedNode(property)),
+            }
+        };
+
+        let prop = property.clone();
+        let property_inner = prop.lock().unwrap();
+        // TODO: add support for keys presented as numbers, e.g. { 10: "some value" }
+        if property_inner.kind() != ValueType::String {
+            bail!(InterpreterError::UnsupportedValue(property))
+        }
+
+        let key = cast_value::<StringValue>(&property_inner).unwrap().value();
+
+        let map = object.map();
+
+        if let Some(value) = map.get(&key) {
+            return Ok(value.clone());
+        }
+
+        Ok(Arc::new(Mutex::new(Box::new(NullValue::default()))))
     }
 
     fn eval_unary_expression(

@@ -1,4 +1,8 @@
 
-let x = true
-let msg = [ "Hello world!", 12, 3.5, x]
-print(msg)
+if math.PI * 2 == 6.28318 {
+  print("PI is correct!")
+} else {
+  print("INCORRECT PI")
+}
+
+print(math.random())
