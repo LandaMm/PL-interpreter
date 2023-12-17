@@ -1,0 +1,4 @@
+
+let x = true
+let msg = [ "Hello world!", 12, 3.5, x]
+print(msg)

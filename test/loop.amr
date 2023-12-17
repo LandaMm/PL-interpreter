@@ -1,0 +1,7 @@
+
+
+fn say(what) {
+  print(what)
+}
+
+say("Hi!")
