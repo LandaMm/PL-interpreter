@@ -1,0 +1,7 @@
+
+
+object Human {
+  fn on_create() {
+    super()
+  }
+}
