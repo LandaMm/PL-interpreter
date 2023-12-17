@@ -1,6 +1,6 @@
 
 
-object Human {
+class Human {
   fn on_create() {
     super()
   }
