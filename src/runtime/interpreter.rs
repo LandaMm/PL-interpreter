@@ -12,7 +12,8 @@ use crate::{
     macros::bail,
     stringify,
     values::{DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
-    BoolValue, EnvironmentId, FunctionParameter, FunctionValue, NativeFnValue, ScopeState,
+    ArrayValue, BoolValue, EnvironmentId, FunctionParameter, FunctionValue, NativeFnValue,
+    ScopeState, StringValue,
 };
 
 use super::error::InterpreterError;
@@ -32,23 +33,12 @@ impl Interpreter {
         }
     }
 
-    pub fn run(
-        &mut self,
-        node: Box<Node>,
-        env: EnvironmentId,
-        invert: bool,
-    ) -> Result<(), InterpreterError> {
+    pub fn run(&mut self, node: Box<Node>, env: EnvironmentId) -> Result<(), InterpreterError> {
         match *node {
             Node::Program(statements) | Node::BlockStatement(statements) => {
-                if invert {
-                    for statement in statements.into_iter().rev() {
-                        self.stack.push_front((statement, env));
-                    }
-                } else {
-                    for statement in statements {
-                        self.stack.push_back((statement, env));
-                    }
-                };
+                for statement in statements {
+                    self.stack.push_back((statement, env));
+                }
             }
             Node::IfStatement(condition, body, alternate) => {
                 self.eval_if_statement(condition, body, alternate, env)?;
@@ -97,6 +87,14 @@ impl Interpreter {
             Node::DecimalLiteral(value) => {
                 Arc::new(Mutex::new(Box::new(DecimalValue::from(value))))
             }
+            Node::StringLiteral(value) => Arc::new(Mutex::new(Box::new(StringValue::from(value)))),
+            Node::ArrayExpression(items) => {
+                let mut values: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>> = vec![];
+                for item in items {
+                    values.push(self.resolve(item, env)?);
+                }
+                Arc::new(Mutex::new(Box::new(ArrayValue::from(values))))
+            }
             Node::BinaryExpression(..) => self.eval_binary_expression(node, env)?,
             Node::Identifier(identifier) => self.eval_identifier(identifier, env)?,
             Node::VariableDeclaration(variable_name, value, is_constant) => {
@@ -122,14 +120,17 @@ impl Interpreter {
                 let mut result: Arc<Mutex<Box<dyn RuntimeValue>>> =
                     Arc::new(Mutex::new(Box::new(NullValue::default())));
                 while let Some(statement) = stack.pop_front() {
-                    println!("statement: {statement:#?}");
                     if let Node::ReturnStatement(value) = *statement {
                         result = self.resolve(value, env)?;
+                        break;
                     } else {
-                        self.run(statement, env, false)?;
+                        self.resolve(statement, env)?;
                     }
                 }
                 result
+            }
+            Node::IfStatement(condition, body, alternate) => {
+                self.eval_if_statement(condition, body, alternate, env)?
             }
             Node::CallExpression(calle, args) => self.eval_call_expression(calle, args, env)?,
             Node::ReturnStatement(..) => bail!(InterpreterError::UnexpectedNode(node)),
@@ -196,9 +197,9 @@ impl Interpreter {
 
         let boolean = cast_value::<BoolValue>(&condition).unwrap();
         if boolean.value() {
-            self.run(body, env_id, true)?;
+            self.resolve(body, env_id)?;
         } else if let Some(alternate) = alternate {
-            self.run(alternate, env_id, true)?;
+            self.resolve(alternate, env_id)?;
         }
         return Ok(Arc::new(Mutex::new(Box::new(NullValue::default()))));
     }
@@ -293,8 +294,9 @@ impl Interpreter {
                     scope.declare_variable(parameter.name.clone(), value, true)?;
                 }
                 drop(scope_state);
-                self.resolve(func_c.body, env_id)?;
-                Arc::new(Mutex::new(Box::new(NullValue::default())))
+                let value = self.resolve(func_c.body, env_id)?;
+                value
+                // Arc::new(Mutex::new(Box::new(NullValue::default())))
             }
             _ => bail!(InterpreterError::InvalidFunctionCallee(fn_callee.clone())),
         };
@@ -328,6 +330,22 @@ impl Interpreter {
             }
             ValueType::Null => Node::Identifier("null".to_string()),
             ValueType::Function | ValueType::NativeFn => Node::Identifier(stringify(value)),
+            ValueType::String => {
+                let string = cast_value::<StringValue>(&value).unwrap();
+                Node::StringLiteral(string.value())
+            }
+            ValueType::Array => {
+                let array = cast_value::<ArrayValue>(&value).unwrap();
+                Node::ArrayExpression(
+                    array
+                        .value()
+                        .into_iter()
+                        .map(|x| {
+                            self.convert_value_to_node(dyn_clone::clone_box(&**x.lock().unwrap()))
+                        })
+                        .collect::<Vec<Box<Node>>>(),
+                )
+            }
         };
         Box::new(node)
     }
