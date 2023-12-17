@@ -346,6 +346,7 @@ impl Interpreter {
                         .collect::<Vec<Box<Node>>>(),
                 )
             }
+            _ => Node::Identifier("null".to_string()),
         };
         Box::new(node)
     }
