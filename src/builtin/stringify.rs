@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use crate::{
-    ArrayValue, BoolValue, DecimalValue, FunctionValue, IntegerValue, NativeFnValue, RuntimeValue,
-    StringValue, ValueType,
+    ArrayValue, BoolValue, DecimalValue, FunctionValue, IntegerValue, NativeFnValue, ObjectValue,
+    RuntimeValue, StringValue, ValueType,
 };
 
 use super::cast_value;
@@ -62,6 +64,17 @@ pub fn stringify(value: Box<dyn RuntimeValue>) -> String {
                     .collect::<Vec<String>>()
                     .join(", ")
             )
+        }
+        ValueType::Object => {
+            let object = cast_value::<ObjectValue>(&value).unwrap();
+            let mut map: HashMap<String, String> = HashMap::new();
+            for (key, value) in object.map().iter() {
+                map.insert(
+                    key.clone(),
+                    stringify(dyn_clone::clone_box(&**value.lock().unwrap())),
+                );
+            }
+            format!("{:#?}", map)
         }
     }
 }
