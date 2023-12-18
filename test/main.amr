@@ -1,5 +1,4 @@
 
 let str = "hello"
-print(str)
-print(str.char_at(1))
-print(str)
+let msg = str.conat(", ", "world!")
+print("result:", msg)

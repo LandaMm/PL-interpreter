@@ -40,12 +40,43 @@ pub fn char_at(value: StringValue) -> ClosureType {
     ))
 }
 
+pub fn concat(value: StringValue) -> ClosureType {
+    Arc::new(Mutex::new(
+        move |args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>| {
+            let mut result = String::from(value.value());
+            for arg in args {
+                let value = arg.lock().unwrap();
+                if value.kind() != ValueType::String {
+                    // TODO: raise type error
+                    continue;
+                }
+                let str_value = cast_value::<StringValue>(&value).unwrap();
+                result.push_str(&str_value.value());
+            }
+
+            mk_runtime_value(Box::new(StringValue::from(result)))
+        },
+    ))
+}
+
 pub fn get_string_object(string_value: &StringValue) -> Box<ObjectValue> {
     let mut map: HashMap<Key, Value> = HashMap::new();
 
     map.insert(
         "char_at".to_string(),
         mk_native_fn("string.char_at".to_string(), char_at(string_value.clone())),
+    );
+
+    map.insert(
+        "concat".to_string(),
+        mk_native_fn("string.concat".to_string(), concat(string_value.clone())),
+    );
+
+    map.insert(
+        "length".to_string(),
+        mk_runtime_value(Box::new(IntegerValue::from(
+            string_value.value().chars().count() as isize,
+        ))),
     );
 
     Box::new(ObjectValue::from(map))

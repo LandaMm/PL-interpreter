@@ -76,7 +76,11 @@ impl std::fmt::Display for InterpreterError {
                 )
             }
             InterpreterError::InvalidFunctionCallee(value) => {
-                write!(f, "Invalid function callee: {value:?}")
+                write!(
+                    f,
+                    "Invalid function callee: {:?}",
+                    stringify(dyn_clone::clone_box(&**(value.lock().unwrap())))
+                )
             }
             InterpreterError::InvalidFunctionParameter(parameter) => {
                 write!(f, "Invalid parameter provided in function: {parameter:?}")
