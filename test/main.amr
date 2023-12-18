@@ -1,3 +1,8 @@
 
-let list = "ice cream, bread, coconut milk"
-print((list.replace(", ", ",")).split(","))
+
+
+if "hi" == "hi" {
+  print("equals!")
+} else {
+  print("not equals")
+}
