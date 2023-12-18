@@ -1,4 +1,3 @@
 
-let str = "hello"
-let msg = str.conat(", ", "world!")
-print("result:", msg)
+let list = "ice cream, bread, coconut milk"
+print((list.replace(", ", ",")).split(","))
