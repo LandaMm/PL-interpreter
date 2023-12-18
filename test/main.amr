@@ -1,3 +1,5 @@
 
-let val = 0.4999999
-print(math.round(val))
+let str = "hello"
+print(str)
+print(str.char_at(1))
+print(str)

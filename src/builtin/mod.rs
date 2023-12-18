@@ -1,6 +1,7 @@
 mod cast_value;
 mod math;
 mod print;
+mod string;
 mod stringify;
 mod time;
 
@@ -13,6 +14,7 @@ use std::sync::{Arc, Mutex};
 pub use cast_value::*;
 pub use math::*;
 pub use print::*;
+pub use string::*;
 pub use stringify::*;
 pub use time::*;
 

@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 use pl_ast::{AssignmentOperator, BinaryOperator, LogicalOperator, Node, UnaryOperator};
 
 use crate::{
-    cast_value,
+    cast_value, get_string_object,
     macros::bail,
     stringify,
     values::{DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
@@ -156,11 +156,16 @@ impl Interpreter {
         let object_inner = obj.lock().unwrap();
         // TODO: add support for primitive types methods, e.g. for string
         // match object.kind() .... String => replace primitive with String class
-        if object_inner.kind() != ValueType::Object {
-            bail!(InterpreterError::UnsupportedValue(object))
-        }
+        let value = match object_inner.kind() {
+            ValueType::Object => dyn_clone::clone_box(&**object_inner),
+            ValueType::String => {
+                let string_value = cast_value::<StringValue>(&object_inner).unwrap();
+                get_string_object(&string_value)
+            }
+            _ => bail!(InterpreterError::UnsupportedValue(object)),
+        };
 
-        let object = cast_value::<ObjectValue>(&object_inner).unwrap();
+        let object = cast_value::<ObjectValue>(&value).unwrap();
 
         let property: Arc<Mutex<Box<dyn RuntimeValue>>> = if computed {
             self.resolve(property, env)?
