@@ -129,6 +129,36 @@ pub fn lower(value: StringValue) -> ClosureType {
     ))
 }
 
+pub fn trim(value: StringValue) -> ClosureType {
+    Arc::new(Mutex::new(
+        move |_args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>| {
+            mk_runtime_value(Box::new(StringValue::from(
+                value.value().trim().to_string(),
+            )))
+        },
+    ))
+}
+
+pub fn trim_start(value: StringValue) -> ClosureType {
+    Arc::new(Mutex::new(
+        move |_args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>| {
+            mk_runtime_value(Box::new(StringValue::from(
+                value.value().trim_start().to_string(),
+            )))
+        },
+    ))
+}
+
+pub fn trim_end(value: StringValue) -> ClosureType {
+    Arc::new(Mutex::new(
+        move |_args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>| {
+            mk_runtime_value(Box::new(StringValue::from(
+                value.value().trim_end().to_string(),
+            )))
+        },
+    ))
+}
+
 pub fn replace(value: StringValue) -> ClosureType {
     Arc::new(Mutex::new(
         move |args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>| {
@@ -220,6 +250,27 @@ pub fn get_string_object(string_value: &StringValue) -> Box<ObjectValue> {
     map.insert(
         "replace".to_string(),
         mk_native_fn("string.replace".to_string(), replace(string_value.clone())),
+    );
+
+    map.insert(
+        "trim".to_string(),
+        mk_native_fn("string.trim".to_string(), trim(string_value.clone())),
+    );
+
+    map.insert(
+        "trim_start".to_string(),
+        mk_native_fn(
+            "string.trim_start".to_string(),
+            trim_start(string_value.clone()),
+        ),
+    );
+
+    map.insert(
+        "trim_end".to_string(),
+        mk_native_fn(
+            "string.trim_end".to_string(),
+            trim_end(string_value.clone()),
+        ),
     );
 
     map.insert(
