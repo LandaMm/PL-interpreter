@@ -808,6 +808,32 @@ impl Interpreter {
         }
     }
 
+    fn eval_string_binary_expression(
+        &mut self,
+        left: Arc<Mutex<Box<dyn RuntimeValue>>>,
+        right: Arc<Mutex<Box<dyn RuntimeValue>>>,
+        operator: BinaryOperator,
+    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
+        let left = left.lock().unwrap();
+        let right = right.lock().unwrap();
+
+        let left_str = cast_value::<StringValue>(&left).unwrap();
+        let right_str = cast_value::<StringValue>(&right).unwrap();
+
+        match operator {
+            BinaryOperator::IsEquals => {
+                return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
+                    left_str.value() == right_str.value(),
+                )))))
+            }
+            // TODO: maybe adding string concatination as Plus?
+            // FIXME: throw appropriate error here
+            _ => bail!(InterpreterError::InvalidCondition(dyn_clone::clone_box(
+                &**left
+            ))),
+        }
+    }
+
     fn eval_binary_expression(
         &mut self,
         node: Box<Node>,
@@ -820,10 +846,15 @@ impl Interpreter {
             let left_kind = left.lock().unwrap().kind();
             let right_kind = right.lock().unwrap().kind();
 
+            // TODO: add support for data type conversion, e.g. number.toString() + String
             if (left_kind == ValueType::Integer || left_kind == ValueType::Decimal)
                 && (right_kind == ValueType::Integer || right_kind == ValueType::Decimal)
             {
                 return Ok(self.eval_numeric_binary_expression(left, right, operator)?);
+            }
+
+            if left_kind == ValueType::String && right_kind == ValueType::String {
+                return Ok(self.eval_string_binary_expression(left, right, operator)?);
             }
 
             return Ok(Arc::new(Mutex::new(Box::new(NullValue::default()))));
