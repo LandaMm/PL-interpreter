@@ -5,8 +5,11 @@ let content = "
 2
 3
 4
+и еще что-то
+مرحبًا
 
-".trim_start()
+"
 
-let lines = content.split("\n")
+print("removed unnecessary letters", content.length - content.trim().length)
+let lines = content.trim().split("\n")
 print(lines)
