@@ -1,7 +1,8 @@
 
+print("message: \"Hi
+everyone!\"")
 
-
-if "hi" == "hi" {
+if "привет" == "привет" {
   print("equals!")
 } else {
   print("not equals")
