@@ -1,9 +1,12 @@
 
-print("message: \"Hi
-everyone!\"")
+let content = "
 
-if "привет" == "привет" {
-  print("equals!")
-} else {
-  print("not equals")
-}
+1
+2
+3
+4
+
+".trim_start()
+
+let lines = content.split("\n")
+print(lines)
