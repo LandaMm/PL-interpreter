@@ -1,5 +1,7 @@
 
 
-let target = 50.0
-let factor = 2.2
-print(type_of(math.pow(target, factor)))
+fn typeof(val) {
+  return type_of(val)
+}
+
+print(typeof("123"))
