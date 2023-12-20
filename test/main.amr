@@ -1,15 +1,5 @@
 
-let content = "
 
-1
-2
-3
-4
-и еще что-то
-مرحبًا
-
-"
-
-print("removed unnecessary letters", content.length - content.trim().length)
-let lines = content.trim().split("\n")
-print(lines)
+let target = 50.0
+let factor = 2.2
+print(type_of(math.pow(target, factor)))
