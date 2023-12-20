@@ -4,7 +4,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{cast_value, DecimalValue, Key, NullValue, RuntimeValue, Value, ValueType};
+use crate::{
+    cast_value, DecimalValue, IntegerValue, Key, NullValue, RuntimeValue, Value, ValueType,
+};
 
 use super::{mk_native_fn, mk_runtime_value};
 
@@ -100,6 +102,44 @@ fn round(args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn Runt
     return arg.clone();
 }
 
+fn pow(args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn RuntimeValue>>> {
+    if args.len() != 2 {
+        return mk_runtime_value(Box::new(NullValue::default()));
+    }
+
+    let target_val = args.get(0).unwrap().lock().unwrap();
+    let factor_val = args.get(1).unwrap().lock().unwrap();
+
+    if target_val.kind() != ValueType::Decimal && target_val.kind() != ValueType::Integer {
+        return mk_runtime_value(Box::new(NullValue::default()));
+    }
+
+    if factor_val.kind() != ValueType::Decimal && factor_val.kind() != ValueType::Integer {
+        return mk_runtime_value(Box::new(NullValue::default()));
+    }
+
+    if target_val.kind() == ValueType::Decimal || factor_val.kind() == ValueType::Decimal {
+        let target = if target_val.kind() == ValueType::Decimal {
+            cast_value::<DecimalValue>(&target_val).unwrap().value()
+        } else {
+            cast_value::<IntegerValue>(&target_val).unwrap().value() as f64
+        };
+
+        let factor = if factor_val.kind() == ValueType::Decimal {
+            cast_value::<DecimalValue>(&factor_val).unwrap().value()
+        } else {
+            cast_value::<IntegerValue>(&factor_val).unwrap().value() as f64
+        };
+
+        return mk_runtime_value(Box::new(DecimalValue::from(target.powf(factor))));
+    }
+
+    let target = cast_value::<IntegerValue>(&target_val).unwrap().value();
+    let factor = cast_value::<IntegerValue>(&factor_val).unwrap().value();
+
+    return mk_runtime_value(Box::new(IntegerValue::from(target.pow(factor as u32))));
+}
+
 pub fn get_math() -> HashMap<Key, Value> {
     let mut map: HashMap<Key, Value> = HashMap::new();
 
@@ -146,6 +186,11 @@ pub fn get_math() -> HashMap<Key, Value> {
             "math.round".to_string(),
             Arc::new(Mutex::new(Box::new(round))),
         ),
+    );
+
+    map.insert(
+        "pow".to_string(),
+        mk_native_fn("math.pow".to_string(), Arc::new(Mutex::new(Box::new(pow)))),
     );
 
     map
