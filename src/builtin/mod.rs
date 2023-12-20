@@ -4,6 +4,7 @@ mod print;
 mod string;
 mod stringify;
 mod time;
+mod type_of;
 
 use crate::{
     BoolValue, ClosureType, Environment, EnvironmentId, NativeFnValue, NullValue, ObjectValue,
@@ -17,6 +18,7 @@ pub use print::*;
 pub use string::*;
 pub use stringify::*;
 pub use time::*;
+pub use type_of::*;
 
 fn mk_runtime_value(value: Box<dyn RuntimeValue>) -> Arc<Mutex<Box<dyn RuntimeValue>>> {
     Arc::new(Mutex::new(value))
@@ -78,6 +80,14 @@ pub fn setup_environment() -> EnvironmentId {
         .declare_variable(
             "math".to_string(),
             mk_runtime_value(Box::new(ObjectValue::from(get_math()))),
+            true,
+        )
+        .unwrap();
+
+    environment
+        .declare_variable(
+            "type_of".to_string(),
+            mk_native_fn("type_of".into(), Arc::new(Mutex::new(native_type_of))),
             true,
         )
         .unwrap();
