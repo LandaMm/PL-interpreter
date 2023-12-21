@@ -1,13 +1,11 @@
 
-fn loop(cb, index, max) {
-  if index < max {
-    cb(index)
-    loop(cb, index + 1, max)
-  }
-}
+let num = 5.0
 
-fn callback(index) {
-  print(index)
-}
+print(num, type_of(num), num.upper)
+print(String(num), type_of(String(num)), String(num).upper)
+print(math)
+print(String(math))
 
-loop(callback, 0, 100)
+let list = ["product", "product#2", "product#3"]
+print(list)
+print(String(list))
