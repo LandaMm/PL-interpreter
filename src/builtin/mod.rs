@@ -1,4 +1,5 @@
 mod cast_value;
+mod convert;
 mod math;
 mod number;
 mod print;
@@ -14,6 +15,7 @@ use crate::{
 use std::sync::{Arc, Mutex};
 
 pub use cast_value::*;
+pub use convert::*;
 pub use math::*;
 pub use number::*;
 pub use print::*;
@@ -90,6 +92,15 @@ pub fn setup_default_environment() -> EnvironmentId {
         .declare_variable(
             "type_of".to_string(),
             mk_native_fn("type_of".into(), Arc::new(Mutex::new(native_type_of))),
+            true,
+        )
+        .unwrap();
+
+    // converters
+    environment
+        .declare_variable(
+            "String".to_string(),
+            mk_native_fn("String".into(), Arc::new(Mutex::new(native_string_convert))),
             true,
         )
         .unwrap();
