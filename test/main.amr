@@ -6,6 +6,6 @@ print(String(num), type_of(String(num)), String(num).upper)
 print(math)
 print(String(math))
 
-let list = ["product", "product#2", "product#3"]
+let list = [1, 2,3,4,5,5,6,7,78,8,9,9,0,4,45,5657,2,45,65,75]
 print(list)
 print(String(list))

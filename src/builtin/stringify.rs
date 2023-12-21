@@ -10,13 +10,22 @@ use crate::{
 
 use super::cast_value;
 
-struct DebugHashMap<'a>(&'a HashMap<String, String>);
+const ARRAY_MAX_ITEMS: usize = 10;
+const OBJECT_MAX_ITEMS: usize = 30;
+
+struct DebugHashMap<'a>(&'a HashMap<String, String>, isize);
 
 impl<'a> Debug for DebugHashMap<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut debug_map = f.debug_map();
         for (key, value) in self.0 {
             debug_map.entry(&key, &DebugValue(&value));
+        }
+        if self.1 > 0 {
+            debug_map.entry(
+                &"...".to_string(),
+                &DebugValue(&format!("more {} fields", self.1)),
+            );
         }
         debug_map.finish()
     }
@@ -70,7 +79,7 @@ pub fn stringify(value: Box<dyn RuntimeValue>) -> String {
         ValueType::Array => {
             let array = cast_value::<ArrayValue>(&value).unwrap();
             format!(
-                "[{}]",
+                "[{}{}]",
                 array
                     .value()
                     .into_iter()
@@ -85,20 +94,31 @@ pub fn stringify(value: Box<dyn RuntimeValue>) -> String {
                         }
                     })
                     .collect::<Vec<String>>()
-                    .join(", ")
+                    .join(", "),
+                if array.value().len() > ARRAY_MAX_ITEMS {
+                    format!(", ...more {} items", array.value().len() - ARRAY_MAX_ITEMS)
+                } else {
+                    "".to_string()
+                }
             )
         }
         ValueType::Object => {
             let object = cast_value::<ObjectValue>(&value).unwrap();
             let mut map: HashMap<String, String> = HashMap::new();
-            for (key, value) in object.map().iter() {
+            for (key, value) in object.map().iter().take(OBJECT_MAX_ITEMS) {
                 map.insert(
                     key.clone(),
                     stringify(dyn_clone::clone_box(&**value.lock().unwrap())),
                 );
             }
 
-            format!("{:#?}", DebugHashMap(&map))
+            format!(
+                "{:#?}",
+                DebugHashMap(
+                    &map,
+                    object.map().len() as isize - OBJECT_MAX_ITEMS as isize
+                )
+            )
         }
     }
 }
