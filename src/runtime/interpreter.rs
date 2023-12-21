@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 use pl_ast::{AssignmentOperator, BinaryOperator, LogicalOperator, Node, UnaryOperator};
 
 use crate::{
-    cast_value, get_string_object,
+    cast_value, get_number_object, get_string_object,
     macros::bail,
     stringify,
     values::{DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
@@ -161,6 +161,10 @@ impl Interpreter {
             ValueType::String => {
                 let string_value = cast_value::<StringValue>(&object_inner).unwrap();
                 get_string_object(&string_value)
+            }
+            ValueType::Integer | ValueType::Decimal => {
+                let number = dyn_clone::clone_box(&**object_inner);
+                get_number_object(&number)
             }
             _ => bail!(InterpreterError::UnsupportedValue(object)),
         };

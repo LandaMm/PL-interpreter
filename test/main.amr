@@ -1,7 +1,3 @@
 
 
-fn typeof(val) {
-  return type_of(val)
-}
-
-print(typeof("123"))
+print((-10).abs())
