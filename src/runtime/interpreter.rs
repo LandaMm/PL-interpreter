@@ -204,7 +204,6 @@ impl Interpreter {
                 _ => {}
             };
         }
-        println!("{:#?}", class);
         Ok(Arc::new(Mutex::new(Box::new(class))))
     }
 
