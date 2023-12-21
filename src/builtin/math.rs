@@ -140,6 +140,34 @@ fn pow(args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn Runtim
     return mk_runtime_value(Box::new(IntegerValue::from(target.pow(factor as u32))));
 }
 
+fn sqrt(args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn RuntimeValue>>> {
+    if args.is_empty() {
+        return mk_runtime_value(Box::new(NullValue::default()));
+    }
+
+    let arg = args.get(0).unwrap();
+    let value = arg.lock().unwrap();
+
+    if value.kind() != ValueType::Decimal && value.kind() != ValueType::Integer {
+        return mk_runtime_value(Box::new(NullValue::default()));
+    }
+
+    if value.kind() == ValueType::Decimal {
+        let decimal = cast_value::<DecimalValue>(&value).unwrap();
+        return mk_runtime_value(Box::new(DecimalValue::from(decimal.value().sqrt())));
+    }
+
+    if value.kind() == ValueType::Integer {
+        let integer = cast_value::<IntegerValue>(&value).unwrap();
+        return mk_runtime_value(Box::new(DecimalValue::from(
+            (integer.value() as f64).sqrt(),
+        )));
+    }
+
+    // only integer case left
+    return arg.clone();
+}
+
 pub fn get_math() -> HashMap<Key, Value> {
     let mut map: HashMap<Key, Value> = HashMap::new();
 
@@ -191,6 +219,14 @@ pub fn get_math() -> HashMap<Key, Value> {
     map.insert(
         "pow".to_string(),
         mk_native_fn("math.pow".to_string(), Arc::new(Mutex::new(Box::new(pow)))),
+    );
+
+    map.insert(
+        "sqrt".to_string(),
+        mk_native_fn(
+            "math.sqrt".to_string(),
+            Arc::new(Mutex::new(Box::new(sqrt))),
+        ),
     );
 
     map
