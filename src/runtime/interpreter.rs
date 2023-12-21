@@ -154,8 +154,6 @@ impl Interpreter {
 
         let obj = object.clone();
         let object_inner = obj.lock().unwrap();
-        // TODO: add support for primitive types methods, e.g. for string
-        // match object.kind() .... String => replace primitive with String class
         let value = match object_inner.kind() {
             ValueType::Object => dyn_clone::clone_box(&**object_inner),
             ValueType::String => {
@@ -347,6 +345,7 @@ impl Interpreter {
                 let mut scope_state = SCOPE_STATE.lock().unwrap();
                 let env_id = scope_state.create_environment(Some(func_c.declaration_env));
                 let scope = scope_state.get_scope_mut(env_id).unwrap();
+                // TODO: validate provided arguments
                 for (index, parameter) in func_c.parameters.iter().enumerate() {
                     let value = args.get(index).unwrap().clone();
                     scope.declare_variable(parameter.name.clone(), value, true)?;
