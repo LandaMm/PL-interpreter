@@ -1,7 +1,7 @@
 use std::{env, fs, thread};
 
 use pl_ast::Parser;
-use pl_interpreter::{setup_environment, Interpreter};
+use pl_interpreter::{setup_default_environment, Interpreter};
 
 fn main() {
     let args = env::args().collect::<Vec<String>>();
@@ -19,7 +19,7 @@ fn main() {
             let ast = parser.produce_ast().unwrap();
             let mut interpreter = Box::new(Interpreter::new());
 
-            let env_id = setup_environment();
+            let env_id = setup_default_environment();
 
             match interpreter.run(Box::new(ast), env_id) {
                 Ok(res) => res,

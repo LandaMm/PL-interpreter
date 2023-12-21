@@ -29,7 +29,7 @@ fn mk_native_fn(name: String, func: ClosureType) -> Arc<Mutex<Box<dyn RuntimeVal
     Arc::new(Mutex::new(Box::new(NativeFnValue::new(name, with_call))))
 }
 
-pub fn setup_environment() -> EnvironmentId {
+pub fn setup_default_environment() -> EnvironmentId {
     // basic constants
     let mut environment = Environment::new(None);
     environment
