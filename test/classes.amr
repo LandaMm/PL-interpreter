@@ -1,7 +1,9 @@
 
 
 class Human {
-  fn on_create() {
-    super()
+  kind = "unknown"
+
+  fn new() {
+    print("hello")
   }
 }

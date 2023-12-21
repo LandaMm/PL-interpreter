@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    ArrayValue, BoolValue, DecimalValue, FunctionValue, IntegerValue, NativeFnValue, ObjectValue,
-    RuntimeValue, StringValue, ValueType,
+    ArrayValue, BoolValue, ClassValue, DecimalValue, FunctionValue, IntegerValue, NativeFnValue,
+    ObjectValue, RuntimeValue, StringValue, ValueType,
 };
 
 use super::cast_value;
@@ -119,6 +119,10 @@ pub fn stringify(value: Box<dyn RuntimeValue>) -> String {
                     object.map().len() as isize - OBJECT_MAX_ITEMS as isize
                 )
             )
+        }
+        ValueType::Class => {
+            let class = cast_value::<ClassValue>(&value).unwrap();
+            format!("<class {}>", class.name)
         }
     }
 }

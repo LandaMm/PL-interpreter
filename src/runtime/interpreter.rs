@@ -12,8 +12,9 @@ use crate::{
     macros::bail,
     stringify,
     values::{DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
-    ArrayValue, BoolValue, EnvironmentId, FunctionParameter, FunctionValue, NativeFnValue,
-    ObjectValue, ScopeState, StringValue,
+    ArrayValue, BoolValue, ClassMethod, ClassMethodParameter, ClassProperty, ClassValue,
+    EnvironmentId, FunctionParameter, FunctionValue, NativeFnValue, ObjectValue, ScopeState,
+    StringValue,
 };
 
 use super::error::InterpreterError;
@@ -46,6 +47,9 @@ impl Interpreter {
             Node::CallExpression(calle, args) => {
                 self.eval_call_expression(calle, args, env)?;
             }
+            Node::ClassDeclaration(id, super_class, body) => {
+                self.eval_class_declaration(id, super_class, body, env)?;
+            }
             // TODO: Add support for ForInStatement
             node => {
                 self.resolve(Box::new(node), env)?;
@@ -65,6 +69,9 @@ impl Interpreter {
                 }
                 Node::IfStatement(condition, body, alternate) => {
                     self.eval_if_statement(condition, body, alternate, current_env)?;
+                }
+                Node::ClassDeclaration(id, super_class, body) => {
+                    self.eval_class_declaration(id, super_class, body, current_env)?;
                 }
                 node => {
                     self.resolve(Box::new(node), current_env)?;
@@ -141,6 +148,64 @@ impl Interpreter {
         };
 
         Ok(value)
+    }
+
+    fn eval_class_declaration(
+        &mut self,
+        name: String,
+        super_class: Option<Box<Node>>,
+        body: Vec<Box<Node>>,
+        env: EnvironmentId,
+    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
+        let mut class = ClassValue::default();
+        class.name = name;
+        match super_class {
+            Some(id) => {
+                let resolved = self.resolve(id, env)?;
+                let target = resolved.lock().unwrap();
+                if target.kind() == ValueType::Class {
+                    let target_class = cast_value::<ClassValue>(&target).unwrap();
+                    class.copy_properties(&target_class);
+                    class.copy_methods(&target_class);
+                }
+            }
+            None => {}
+        };
+        for class_stmt in body {
+            match *class_stmt {
+                Node::PropertyDefinition(name, value, is_static) => {
+                    class.insert_property(ClassProperty {
+                        value: self.resolve(value, env)?,
+                        name,
+                        is_static,
+                    })
+                }
+                Node::MethodDefinition(name, method_params, body, is_static) => {
+                    let mut params: Vec<ClassMethodParameter> = vec![];
+                    for param in method_params {
+                        match *param {
+                            Node::Identifier(name) => params.push(ClassMethodParameter {
+                                name,
+                                default_value: None,
+                            }),
+                            // TODO: Add support for default value (Assignment Expression)
+                            _ => bail!(InterpreterError::UnexpectedNode(dyn_clone::clone_box(
+                                &*param
+                            ))),
+                        }
+                    }
+                    class.insert_method(ClassMethod {
+                        name,
+                        is_static,
+                        args: params,
+                        body: body,
+                    })
+                }
+                _ => {}
+            };
+        }
+        println!("{:#?}", class);
+        Ok(Arc::new(Mutex::new(Box::new(class))))
     }
 
     fn eval_member_expression(
