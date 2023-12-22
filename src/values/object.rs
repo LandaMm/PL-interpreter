@@ -37,4 +37,8 @@ impl ObjectValue {
     pub fn map(&self) -> HashMap<Key, Value> {
         self.map.clone()
     }
+
+    pub fn assign_property(&mut self, key: Key, value: Value) {
+        self.map.entry(key).and_modify(|val| *val = value);
+    }
 }

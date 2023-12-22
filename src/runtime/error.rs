@@ -14,6 +14,7 @@ pub enum InterpreterError {
     ValueCastError(Box<dyn RuntimeValue>, String),
     VariableDeclarationExist(String),
     UnresolvedVariable(String),
+    UnresolvedProperty(String),
     ReassignConstant(String),
     InvalidAssignFactor(Box<Node>),
     InvalidFunctionCallee(Arc<Mutex<Box<dyn RuntimeValue>>>),
@@ -21,6 +22,8 @@ pub enum InterpreterError {
     InvalidFunctionEnvironment(EnvironmentId),
     InvalidCondition(Box<dyn RuntimeValue>),
     InvalidValue(Box<dyn RuntimeValue>, String),
+    InvalidDefaultParameter(String),
+    InvalidParameterCount(usize, usize),
 }
 
 impl std::fmt::Display for InterpreterError {
@@ -99,13 +102,30 @@ impl std::fmt::Display for InterpreterError {
                     stringify(dyn_clone::clone_box(&**condition))
                 )
             }
-            Self::InvalidValue(value, expected) => {
+            InterpreterError::InvalidValue(value, expected) => {
                 write!(
                     f,
                     "Invalid value: {}, expected {}",
                     stringify(dyn_clone::clone_box(&**value)),
                     expected
                 )
+            }
+            InterpreterError::InvalidDefaultParameter(name) => {
+                write!(
+                    f,
+                    "Invalid default value provided for non-last argument: {}",
+                    name
+                )
+            }
+            InterpreterError::InvalidParameterCount(expected, got) => {
+                write!(
+                    f,
+                    "Invalid calle parameters count. Expected {}, but got {}",
+                    expected, got
+                )
+            }
+            InterpreterError::UnresolvedProperty(property) => {
+                write!(f, "Unresolved property: {}", property)
             }
         }
     }

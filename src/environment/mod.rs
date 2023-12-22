@@ -64,11 +64,12 @@ impl ScopeState {
         variable_name: String,
         value: Arc<Mutex<Box<dyn RuntimeValue>>>,
         env_id: EnvironmentId,
+        ignore_constant: bool,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         let env_id = self.resolve_mut(env_id, variable_name.clone())?;
         let scope = self.get_scope_mut(env_id).unwrap();
 
-        if scope.constants.contains(&variable_name) {
+        if scope.constants.contains(&variable_name) && !ignore_constant {
             bail!(InterpreterError::ReassignConstant(variable_name.clone()))
         }
 

@@ -1,11 +1,16 @@
 
-let num = 5.0
+class Human {
+  kind = "unknown"
 
-print(num, type_of(num), num.upper)
-print(String(num), type_of(String(num)), String(num).upper)
-print(math)
-print(String(math))
+  fn __new__() {
+    print("hello")
+    self.kind = "some_kind"
+    print(self.kind)
+  }
+}
 
-let list = [1, 2,3,4,5,5,6,7,78,8,9,9,0,4,45,5657,2,45,65,75]
-print(list)
-print(String(list))
+print(Human)
+
+let person = Human()
+
+print(person)
