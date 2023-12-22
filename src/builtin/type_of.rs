@@ -21,8 +21,8 @@ pub fn native_type_of(
         ValueType::Null => "null".into(),
         ValueType::Object => "object".into(),
         ValueType::String => "string".into(),
-        // TODO: should we return "object" here?
         ValueType::Class => "class".into(),
+        ValueType::ClassInstance => "object".into(),
     };
 
     mk_runtime_value(Box::new(StringValue::from(value_type)))

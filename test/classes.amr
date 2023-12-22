@@ -3,7 +3,9 @@
 class Human {
   kind = "unknown"
 
-  fn new() {
+  fn __new__() {
     print("hello")
   }
 }
+
+print(Human)

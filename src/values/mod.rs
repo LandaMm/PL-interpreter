@@ -5,6 +5,7 @@ use dyn_clone::DynClone;
 mod array;
 mod bool;
 mod class;
+mod class_instance;
 mod decimal;
 mod function;
 mod integer;
@@ -16,6 +17,7 @@ mod string;
 pub use array::*;
 pub use bool::*;
 pub use class::*;
+pub use class_instance::*;
 pub use decimal::*;
 pub use function::*;
 pub use integer::*;
@@ -36,6 +38,7 @@ pub enum ValueType {
     Array,
     Object,
     Class,
+    ClassInstance,
 }
 
 pub trait RuntimeValue: DynClone + Debug + Send + Sync {
