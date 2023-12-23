@@ -5,9 +5,9 @@ class Person {
 
   fn __new__(age) {
     self.age = age
-    # if self.age > 17 {
+    if self.age > 17 {
       self.is_adult = true
-    # }
+    }
   }
 
   fn get_age() {
