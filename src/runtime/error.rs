@@ -57,7 +57,11 @@ impl std::fmt::Display for InterpreterError {
                 )
             }
             InterpreterError::UnsupportedValue(value) => {
-                write!(f, "Unsupported value: {:?}", value)
+                write!(
+                    f,
+                    "Unsupported value: {}",
+                    stringify(dyn_clone::clone_box(&**value.lock().unwrap()))
+                )
             }
             InterpreterError::VariableDeclarationExist(variable_name) => {
                 write!(

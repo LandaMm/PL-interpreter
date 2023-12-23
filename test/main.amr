@@ -2,8 +2,10 @@
 class Person {
   is_adult = false
   age = 0
+  name = ""
 
-  fn __new__(age) {
+  fn __new__(name, age) {
+    self.name = name
     self.age = age
     if self.age > 17 {
       self.is_adult = true
@@ -18,15 +20,25 @@ class Person {
     self.age = new_age
     print("new age:", self.age)
   }
+
+  fn greet() {
+    print("It's", self.name, "(".concat(String(self.age), ")"))
+  }
 }
 
 class Company {
   static count = 0
   boss = null
+  employee = null
 
   fn __new__(person) {
     Company.count += 1
     self.boss = person
+    self.employee = Person("empl", 15)
+  }
+
+  fn fire_empl() {
+    self.employee = null
   }
 
   static fn get_count() {
@@ -34,14 +46,17 @@ class Company {
   }
 }
 
-let person = Person(18)
+let person = Person("boss", 18)
 
 let company = Company(person)
 
-print("count:", Company.get_count())
+print(company)
 
-print(company.boss.get_age())
+company.boss.greet()
+company.employee.greet()
 
-company.boss.set_age(19)
+company.fire_empl()
 
-print(company.boss.get_age())
+print(company)
+
+company.employee.greet()

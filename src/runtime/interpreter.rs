@@ -291,7 +291,9 @@ impl Interpreter {
                 let number = dyn_clone::clone_box(&**object_inner);
                 get_number_object(&number)
             }
-            _ => bail!(InterpreterError::UnsupportedValue(object)),
+            _ => bail!(InterpreterError::UnsupportedValue(Arc::new(Mutex::new(
+                dyn_clone::clone_box(&**object_inner)
+            )))),
         };
 
         let object = cast_value::<ObjectValue>(&value).unwrap();
