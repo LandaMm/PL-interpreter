@@ -147,7 +147,10 @@ impl Interpreter {
             node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
         };
 
-        Ok(value)
+        let v = value.lock().unwrap();
+        let res = Arc::new(Mutex::new(dyn_clone::clone_box(&**v)));
+
+        Ok(res)
     }
 
     fn eval_class_declaration(
@@ -227,10 +230,59 @@ impl Interpreter {
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         let object = self.resolve(object, env)?;
 
+        let property: Arc<Mutex<Box<dyn RuntimeValue>>> = if computed {
+            self.resolve(property, env)?
+        } else {
+            match *property {
+                Node::Identifier(value) => Arc::new(Mutex::new(Box::new(StringValue::from(value)))),
+                _ => bail!(InterpreterError::UnexpectedNode(property)),
+            }
+        };
+
+        let prop = property.clone();
+        let property_inner = prop.lock().unwrap();
+        if property_inner.kind() != ValueType::String {
+            bail!(InterpreterError::UnsupportedValue(property))
+        }
+
+        let key = cast_value::<StringValue>(&property_inner).unwrap().value();
+
         let obj = object.clone();
         let object_inner = obj.lock().unwrap();
         let value = match object_inner.kind() {
             ValueType::Object => dyn_clone::clone_box(&**object_inner),
+            ValueType::Class => {
+                let class = cast_value::<ClassValue>(&object_inner).unwrap();
+                let class_prop = class.get_static_property(key.clone());
+                if class_prop.is_none() {
+                    let class_method = class.get_static_method(key.clone());
+                    if let Some(class_method) = class_method {
+                        let mut temp_map: HashMap<Key, Value> = HashMap::new();
+                        let func = FunctionValue::new(
+                            class_method.name,
+                            class_method
+                                .args
+                                .iter()
+                                .map(|arg| FunctionParameter {
+                                    name: arg.name.clone(),
+                                    default_value: arg.default_value.clone(),
+                                })
+                                .collect(),
+                            // TODO: look if correct env
+                            env,
+                            class_method.body,
+                        );
+                        temp_map.insert(key.clone(), Arc::new(Mutex::new(Box::new(func))));
+                        Box::new(ObjectValue::from(temp_map))
+                    } else {
+                        bail!(InterpreterError::UnresolvedProperty(key.clone()))
+                    }
+                } else {
+                    let mut temp_map: HashMap<Key, Value> = HashMap::new();
+                    temp_map.insert(key.clone(), class_prop.unwrap().value);
+                    Box::new(ObjectValue::from(temp_map))
+                }
+            }
             ValueType::String => {
                 let string_value = cast_value::<StringValue>(&object_inner).unwrap();
                 get_string_object(&string_value)
@@ -243,24 +295,6 @@ impl Interpreter {
         };
 
         let object = cast_value::<ObjectValue>(&value).unwrap();
-
-        let property: Arc<Mutex<Box<dyn RuntimeValue>>> = if computed {
-            self.resolve(property, env)?
-        } else {
-            match *property {
-                Node::Identifier(value) => Arc::new(Mutex::new(Box::new(StringValue::from(value)))),
-                _ => bail!(InterpreterError::UnexpectedNode(property)),
-            }
-        };
-
-        let prop = property.clone();
-        let property_inner = prop.lock().unwrap();
-        // TODO: add support for keys presented as numbers, e.g. { 10: "some value" }
-        if property_inner.kind() != ValueType::String {
-            bail!(InterpreterError::UnsupportedValue(property))
-        }
-
-        let key = cast_value::<StringValue>(&property_inner).unwrap().value();
 
         let map = object.map();
 
@@ -380,6 +414,82 @@ impl Interpreter {
         Ok(value)
     }
 
+    fn eval_class_call(
+        &mut self,
+        object: Box<Node>,
+        obj_val: Box<dyn RuntimeValue>,
+        callee_inner: Box<dyn RuntimeValue>,
+        args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>,
+        env: EnvironmentId,
+    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
+        let obj = cast_value::<ObjectValue>(&obj_val).unwrap();
+        if callee_inner.kind() != ValueType::Function {
+            bail!(InterpreterError::InvalidFunctionCallee(Arc::new(
+                Mutex::new(callee_inner)
+            )))
+        }
+        let func = cast_value::<FunctionValue>(&callee_inner).unwrap();
+
+        let mut scope_state = SCOPE_STATE.lock().unwrap();
+        let env_id = scope_state.create_environment(Some(func.declaration_env));
+        let scope = scope_state.get_scope_mut(env_id).unwrap();
+        scope.declare_variable("self".into(), Arc::new(Mutex::new(obj)), true)?;
+        // TODO: validate provided arguments
+        for (index, parameter) in func.parameters.iter().enumerate() {
+            let value = args.get(index).unwrap().clone();
+            scope.declare_variable(parameter.name.clone(), value, true)?;
+        }
+        drop(scope_state);
+        let value = self.resolve(func.body, env_id)?;
+        let scope_state = SCOPE_STATE.lock().unwrap();
+        let scope = scope_state.get_scope(env_id).unwrap();
+        let new_self = scope.lookup_variable("self".into(), &scope_state)?;
+        drop(scope_state);
+        let mut assigne = Some(object.clone());
+        let mut assign_value = new_self;
+        while let Some(ref assignee) = assigne {
+            match *dyn_clone::clone_box(&**assignee) {
+                Node::Identifier(var_name) => {
+                    self.assign_variable(var_name, assign_value.clone(), env, true)?;
+                    assigne = None;
+                }
+                Node::MemberExpression(parent, current, computed) => {
+                    let prop: Arc<Mutex<Box<dyn RuntimeValue>>> = if computed {
+                        self.resolve(current, env)?
+                    } else {
+                        match *current {
+                            Node::Identifier(value) => {
+                                Arc::new(Mutex::new(Box::new(StringValue::from(value))))
+                            }
+                            _ => bail!(InterpreterError::UnsupportedNode(current)),
+                        }
+                    };
+                    let prop_inner = prop.lock().unwrap();
+                    if prop_inner.kind() != ValueType::String {
+                        bail!(InterpreterError::UnsupportedValue(Arc::new(Mutex::new(
+                            dyn_clone::clone_box(&**prop_inner)
+                        ))))
+                    }
+                    let prop_str = cast_value::<StringValue>(&prop_inner).unwrap();
+
+                    let obj_val = self.resolve(parent.clone(), env)?;
+                    let obj_inner = obj_val.lock().unwrap();
+                    if obj_inner.kind() == ValueType::Object {
+                        let mut obj = cast_value::<ObjectValue>(&obj_inner).unwrap();
+                        obj.assign_property(prop_str.value(), assign_value.clone());
+                        assigne = Some(parent);
+                        assign_value = Arc::new(Mutex::new(obj));
+                    } else {
+                        // TODO: look if this correct to look only for object values
+                        bail!(InterpreterError::UnexpectedNode(object.clone()))
+                    }
+                }
+                node => bail!(InterpreterError::UnexpectedNode(Box::new(node))),
+            };
+        }
+        Ok(value)
+    }
+
     fn eval_call_expression(
         &mut self,
         callee: Box<Node>,
@@ -390,6 +500,32 @@ impl Interpreter {
         for arg in arguments {
             let value = self.resolve(arg, env)?;
             args.push(value);
+        }
+        if let Node::MemberExpression(object, property, _computed) =
+            *dyn_clone::clone_box(&*callee.clone())
+        {
+            let object_value = self.resolve(object.clone(), env)?;
+            let obj = object_value.lock().unwrap();
+            if obj.kind() == ValueType::Object {
+                let class_obj = cast_value::<ObjectValue>(&obj).unwrap();
+                if let Node::Identifier(func_name) = *property {
+                    let calle = class_obj.get_property(func_name.clone());
+                    if calle.is_none() {
+                        bail!(InterpreterError::UnresolvedProperty(func_name.clone()))
+                    }
+                    let calle_res = calle.unwrap();
+                    let fn_callee = calle_res.lock().unwrap();
+                    if obj.kind() == ValueType::Object && fn_callee.kind() == ValueType::Function {
+                        return Ok(self.eval_class_call(
+                            object,
+                            dyn_clone::clone_box(&**obj),
+                            dyn_clone::clone_box(&**fn_callee),
+                            args,
+                            env,
+                        )?);
+                    }
+                }
+            }
         }
         let fn_callee = self.resolve(callee, env)?;
 
@@ -445,6 +581,30 @@ impl Interpreter {
                     instance_map.insert(property.name.clone(), property.value.clone());
                 }
 
+                for (method_name, method) in
+                    methods.clone().iter().filter(|method| !method.1.is_static)
+                {
+                    if method_name == "__new__" {
+                        continue;
+                    }
+                    let function = FunctionValue::new(
+                        method_name.clone(),
+                        method
+                            .args
+                            .iter()
+                            .map(|arg| {
+                                FunctionParameter::new(arg.name.clone(), arg.default_value.clone())
+                            })
+                            .collect(),
+                        env,
+                        method.clone().body,
+                    );
+                    instance_map.insert(
+                        method_name.clone(),
+                        Arc::new(Mutex::new(Box::new(function))),
+                    );
+                }
+
                 if methods.contains_key(&String::from("__new__")) {
                     let constructor = methods.get(&String::from("__new__")).unwrap();
                     let init_args = constructor.args.clone();
@@ -484,12 +644,10 @@ impl Interpreter {
                         true,
                     )?;
                     drop(scope_state);
-                    println!("executing constructor {:#?}", constructor.body.clone());
                     self.resolve(constructor.body.clone(), env_id)?;
                     let scope_state = SCOPE_STATE.lock().unwrap();
                     let scope = scope_state.get_scope(env_id).unwrap();
                     let value = scope.lookup_variable("self".into(), &scope_state)?;
-                    println!("value: {value:#?}");
                     value
                 } else {
                     Arc::new(Mutex::new(Box::new(ObjectValue::from(instance_map))))
@@ -621,8 +779,6 @@ impl Interpreter {
         Ok(scope_state.assign_variable(name, value, env, ignore_constant)?)
     }
 
-    // fn
-
     fn eval_assignment_expression(
         &mut self,
         left: Box<Node>,
@@ -633,66 +789,156 @@ impl Interpreter {
         if let Node::MemberExpression(object, property, computed) = *left {
             let obj_val = self.resolve(object.clone(), env)?;
             let obj_inner = obj_val.lock().unwrap();
-            let mut obj = cast_value::<ObjectValue>(&obj_inner).unwrap();
-            let prop: Arc<Mutex<Box<dyn RuntimeValue>>> = if computed {
-                self.resolve(property, env)?
-            } else {
-                match *property {
-                    Node::Identifier(value) => {
-                        Arc::new(Mutex::new(Box::new(StringValue::from(value))))
+            match obj_inner.kind() {
+                ValueType::Object => {
+                    let mut obj = cast_value::<ObjectValue>(&obj_inner).unwrap();
+                    let prop: Arc<Mutex<Box<dyn RuntimeValue>>> = if computed {
+                        self.resolve(property, env)?
+                    } else {
+                        match *property {
+                            Node::Identifier(value) => {
+                                Arc::new(Mutex::new(Box::new(StringValue::from(value))))
+                            }
+                            _ => bail!(InterpreterError::UnsupportedNode(property)),
+                        }
+                    };
+                    let prop_inner = prop.lock().unwrap();
+                    if prop_inner.kind() != ValueType::String {
+                        bail!(InterpreterError::UnsupportedValue(prop.clone()))
                     }
-                    _ => bail!(InterpreterError::UnsupportedNode(property)),
-                }
-            };
-            let prop_inner = prop.lock().unwrap();
-            if prop_inner.kind() != ValueType::String {
-                bail!(InterpreterError::UnsupportedValue(prop.clone()))
-            }
-            let prop_name = cast_value::<StringValue>(&prop_inner).unwrap().value();
-            let obj_map = obj.map();
-            if operator == AssignmentOperator::Equals {
-                let right_val = self.resolve(right.clone(), env)?;
-                obj.assign_property(prop_name, right_val);
-                if let Node::Identifier(object_name) = *object {
-                    return Ok(self.assign_variable(
-                        object_name,
-                        Arc::new(Mutex::new(obj)),
-                        env,
-                        true,
-                    )?);
-                } else {
-                    return Ok(self.eval_assignment_expression(
-                        object,
-                        operator,
-                        right.clone(),
-                        env,
-                    )?);
-                }
-            }
-            let previous_value_opt = obj_map.get(&prop_name);
-            if let Some(previous_value) = previous_value_opt {
-                let left = self
-                    .convert_value_to_node(dyn_clone::clone_box(&**previous_value.lock().unwrap()));
-                let binary_op = match operator {
-                    AssignmentOperator::Addition => BinaryOperator::Plus,
-                    AssignmentOperator::Division => BinaryOperator::Divide,
-                    AssignmentOperator::Modulation => BinaryOperator::Modulo,
-                    AssignmentOperator::Multiplication => BinaryOperator::Multiply,
-                    AssignmentOperator::Subtraction => BinaryOperator::Minus,
-                    AssignmentOperator::Equals => {
-                        panic!("unexpected equals assignment operator")
+                    let prop_name = cast_value::<StringValue>(&prop_inner).unwrap().value();
+                    let obj_map = obj.map();
+                    if operator == AssignmentOperator::Equals {
+                        let right_val = self.resolve(right.clone(), env)?;
+                        obj.assign_property(prop_name, right_val);
+                        if let Node::Identifier(object_name) = *object {
+                            return Ok(self.assign_variable(
+                                object_name,
+                                Arc::new(Mutex::new(obj)),
+                                env,
+                                true,
+                            )?);
+                        } else {
+                            return Ok(self.eval_assignment_expression(
+                                object,
+                                operator,
+                                right.clone(),
+                                env,
+                            )?);
+                        }
                     }
-                };
-                let binary = Node::BinaryExpression(left, binary_op, right.clone());
-                let value = self.resolve(Box::new(binary), env)?;
-                obj.assign_property(prop_name, value);
-                if let Node::Identifier(object_name) = *object {
-                    Ok(self.assign_variable(object_name, Arc::new(Mutex::new(obj)), env, true)?)
-                } else {
-                    self.eval_assignment_expression(object, operator, right.clone(), env)
+                    let previous_value_opt = obj_map.get(&prop_name);
+                    if let Some(previous_value) = previous_value_opt {
+                        let left = self.convert_value_to_node(dyn_clone::clone_box(
+                            &**previous_value.lock().unwrap(),
+                        ));
+                        let binary_op = match operator {
+                            AssignmentOperator::Addition => BinaryOperator::Plus,
+                            AssignmentOperator::Division => BinaryOperator::Divide,
+                            AssignmentOperator::Modulation => BinaryOperator::Modulo,
+                            AssignmentOperator::Multiplication => BinaryOperator::Multiply,
+                            AssignmentOperator::Subtraction => BinaryOperator::Minus,
+                            AssignmentOperator::Equals => {
+                                panic!("unexpected equals assignment operator")
+                            }
+                        };
+                        let binary = Node::BinaryExpression(left, binary_op, right.clone());
+                        let value = self.resolve(Box::new(binary), env)?;
+                        obj.assign_property(prop_name, value);
+                        if let Node::Identifier(object_name) = *object {
+                            Ok(self.assign_variable(
+                                object_name,
+                                Arc::new(Mutex::new(obj)),
+                                env,
+                                true,
+                            )?)
+                        } else {
+                            self.eval_assignment_expression(object, operator, right.clone(), env)
+                        }
+                    } else {
+                        bail!(InterpreterError::UnresolvedProperty(prop_name))
+                    }
                 }
-            } else {
-                bail!(InterpreterError::UnresolvedProperty(prop_name))
+                ValueType::Class => {
+                    let mut class = cast_value::<ClassValue>(&obj_inner).unwrap();
+                    let prop: Arc<Mutex<Box<dyn RuntimeValue>>> = if computed {
+                        self.resolve(property, env)?
+                    } else {
+                        match *property {
+                            Node::Identifier(value) => {
+                                Arc::new(Mutex::new(Box::new(StringValue::from(value))))
+                            }
+                            _ => bail!(InterpreterError::UnsupportedNode(property)),
+                        }
+                    };
+                    let prop_inner = prop.lock().unwrap();
+                    if prop_inner.kind() != ValueType::String {
+                        bail!(InterpreterError::UnsupportedValue(prop.clone()))
+                    }
+                    let prop_name = cast_value::<StringValue>(&prop_inner).unwrap().value();
+                    if operator == AssignmentOperator::Equals {
+                        let right_val = self.resolve(right.clone(), env)?;
+                        class.insert_property(ClassProperty {
+                            is_static: true,
+                            name: prop_name,
+                            value: right_val,
+                        });
+                        if let Node::Identifier(object_name) = *object {
+                            return Ok(self.assign_variable(
+                                object_name,
+                                Arc::new(Mutex::new(class)),
+                                env,
+                                true,
+                            )?);
+                        } else {
+                            return Ok(self.eval_assignment_expression(
+                                object,
+                                operator,
+                                right.clone(),
+                                env,
+                            )?);
+                        }
+                    }
+                    let previous_value_opt = class.get_static_property(prop_name.clone());
+                    if let Some(previous_value) = previous_value_opt {
+                        let left = self.convert_value_to_node(dyn_clone::clone_box(
+                            &**previous_value.value.lock().unwrap(),
+                        ));
+                        let binary_op = match operator {
+                            AssignmentOperator::Addition => BinaryOperator::Plus,
+                            AssignmentOperator::Division => BinaryOperator::Divide,
+                            AssignmentOperator::Modulation => BinaryOperator::Modulo,
+                            AssignmentOperator::Multiplication => BinaryOperator::Multiply,
+                            AssignmentOperator::Subtraction => BinaryOperator::Minus,
+                            AssignmentOperator::Equals => {
+                                panic!("unexpected equals assignment operator")
+                            }
+                        };
+                        let binary = Node::BinaryExpression(left, binary_op, right.clone());
+                        let value = self.resolve(Box::new(binary), env)?;
+                        class.insert_property(ClassProperty {
+                            name: prop_name,
+                            is_static: true,
+                            value,
+                        });
+                        if let Node::Identifier(object_name) = *object {
+                            Ok(self.assign_variable(
+                                object_name,
+                                Arc::new(Mutex::new(class)),
+                                env,
+                                true,
+                            )?)
+                        } else {
+                            self.eval_assignment_expression(object, operator, right.clone(), env)
+                        }
+                    } else {
+                        bail!(InterpreterError::UnresolvedProperty(prop_name))
+                    }
+                }
+                _ => bail!(InterpreterError::InvalidValue(
+                    dyn_clone::clone_box(&**obj_inner),
+                    "object or class".to_string()
+                )),
             }
         } else if let Node::Identifier(variable_name) = *left {
             let value = match operator {
@@ -741,7 +987,6 @@ impl Interpreter {
             Some(value) => self.resolve(value, env)?,
             None => Arc::new(Mutex::new(Box::new(NullValue::default()))),
         };
-        println!("decl value : {value:#?}");
 
         let scope_c = SCOPE_STATE.clone();
         let mut scope_state = scope_c.lock().unwrap();
@@ -940,7 +1185,7 @@ impl Interpreter {
             BinaryOperator::IsEquals => {
                 return Ok(Arc::new(Mutex::new(Box::new(BoolValue::from(
                     left == right,
-                )))))
+                )))));
             }
         }
     }
@@ -1009,21 +1254,24 @@ impl Interpreter {
         node: Box<Node>,
         env: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        if let Node::BinaryExpression(left, operator, right) = *node {
+        if let Node::BinaryExpression(left, operator, right_node) = *node {
             let left = self.resolve(left, env)?;
-            let right = self.resolve(right, env)?;
+            let right = self.resolve(right_node, env)?;
 
-            let left_kind = left.lock().unwrap().kind();
-            let right_kind = right.lock().unwrap().kind();
+            let left_inn = left.lock().unwrap();
+            let left_kind = dyn_clone::clone_box(&**left_inn).kind();
+            let right_inn = right.lock().unwrap();
+            let right_kind = dyn_clone::clone_box(&**right_inn).kind();
+            drop(left_inn);
+            drop(right_inn);
 
             // TODO: add support for data type conversion, e.g. number.toString() + String
             if (left_kind == ValueType::Integer || left_kind == ValueType::Decimal)
                 && (right_kind == ValueType::Integer || right_kind == ValueType::Decimal)
             {
-                return Ok(self.eval_numeric_binary_expression(left, right, operator)?);
-            }
-
-            if left_kind == ValueType::String && right_kind == ValueType::String {
+                let value = self.eval_numeric_binary_expression(left, right, operator)?;
+                return Ok(value);
+            } else if left_kind == ValueType::String && right_kind == ValueType::String {
                 return Ok(self.eval_string_binary_expression(left, right, operator)?);
             }
 

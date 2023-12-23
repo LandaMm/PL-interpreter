@@ -38,6 +38,10 @@ impl ObjectValue {
         self.map.clone()
     }
 
+    pub fn get_property(&self, key: Key) -> Option<Value> {
+        self.map.get(&key).cloned()
+    }
+
     pub fn assign_property(&mut self, key: Key, value: Value) {
         self.map.entry(key).and_modify(|val| *val = value);
     }

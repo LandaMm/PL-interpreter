@@ -107,4 +107,25 @@ impl ClassValue {
             self.insert_method(method.clone());
         }
     }
+
+    pub fn get_static_property(&self, property_name: String) -> Option<ClassProperty> {
+        self.properties
+            .iter()
+            .find(|prop| prop.name == property_name && prop.is_static)
+            .cloned()
+    }
+
+    pub fn get_static_method(&self, method_name: String) -> Option<ClassMethod> {
+        let method = self
+            .methods
+            .iter()
+            .find(|prop| prop.0.clone() == method_name && prop.1.is_static);
+        if method.is_none() {
+            return None;
+        }
+
+        let method = method.unwrap();
+
+        Some(method.1.clone())
+    }
 }

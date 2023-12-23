@@ -1,16 +1,47 @@
 
-class Human {
-  kind = "unknown"
+class Person {
+  is_adult = false
+  age = 0
 
-  fn __new__() {
-    print("hello")
-    self.kind = "some_kind"
-    print(self.kind)
+  fn __new__(age) {
+    self.age = age
+    # if self.age > 17 {
+      self.is_adult = true
+    # }
+  }
+
+  fn get_age() {
+    return self.age
+  }
+
+  fn set_age(new_age) {
+    self.age = new_age
+    print("new age:", self.age)
   }
 }
 
-print(Human)
+class Company {
+  static count = 0
+  boss = null
 
-let person = Human()
+  fn __new__(person) {
+    Company.count += 1
+    self.boss = person
+  }
 
-print(person)
+  static fn get_count() {
+    return Company.count
+  }
+}
+
+let person = Person(18)
+
+let company = Company(person)
+
+print("count:", Company.get_count())
+
+print(company.boss.get_age())
+
+company.boss.set_age(19)
+
+print(company.boss.get_age())
