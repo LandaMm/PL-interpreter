@@ -1,6 +1,6 @@
 
-let i = 0
-while i < 10 {
-  print("index:", i)
-  i += 1
+fn pretty_print(msg, mode) {
+  print("[".concat(mode, "]"), msg)
 }
+
+pretty_print("hello!", "INFO")
