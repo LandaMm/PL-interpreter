@@ -1,3 +1,4 @@
+mod array;
 mod cast_value;
 mod convert;
 mod math;
@@ -14,6 +15,7 @@ use crate::{
 };
 use std::sync::{Arc, Mutex};
 
+pub use array::*;
 pub use cast_value::*;
 pub use convert::*;
 pub use math::*;
@@ -105,7 +107,10 @@ pub fn setup_default_environment() -> EnvironmentId {
         )
         .unwrap();
 
-    let env_id = SCOPE_STATE.lock().unwrap().append_environment(environment);
+    let env_id = SCOPE_STATE
+        .lock()
+        .expect("setup_default_environment: failed to get scope state")
+        .append_environment(environment);
 
     env_id
 }

@@ -186,6 +186,19 @@ impl Environment {
         Ok(value)
     }
 
+    pub fn lookup_variable_safe(
+        &self,
+        variable_name: String,
+        scope_state: &ScopeState,
+    ) -> Option<Arc<Mutex<Box<dyn RuntimeValue>>>> {
+        let env_id = self.resolve(variable_name.clone(), scope_state);
+        if env_id.is_err() {
+            return None;
+        }
+        let env = scope_state.get_scope(env_id.unwrap()).unwrap();
+        env.variables.get(&variable_name).cloned()
+    }
+
     // pub fn resolve_mut(
     //     &mut self,
     //     variable_name: String,

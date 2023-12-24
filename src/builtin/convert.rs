@@ -11,7 +11,11 @@ pub fn native_string_convert(
         return mk_runtime_value(Box::new(NullValue::default()));
     }
 
-    let arg = args.get(0).unwrap().lock().unwrap();
+    let arg = args
+        .get(0)
+        .unwrap()
+        .lock()
+        .expect("string_converter: failed to get first argument");
 
     let value = match arg.kind() {
         ValueType::Array => {

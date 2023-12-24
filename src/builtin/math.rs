@@ -24,7 +24,9 @@ fn floor(args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn Runt
     }
 
     let arg = args.get(0).unwrap();
-    let value = arg.lock().unwrap();
+    let value = arg
+        .lock()
+        .expect("math.floor: failed to get first argument");
 
     if value.kind() != ValueType::Decimal && value.kind() != ValueType::Integer {
         return mk_runtime_value(Box::new(NullValue::default()));
@@ -45,7 +47,7 @@ fn ceil(args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn Runti
     }
 
     let arg = args.get(0).unwrap();
-    let value = arg.lock().unwrap();
+    let value = arg.lock().expect("math.ceil: failed to get first argument");
 
     if value.kind() != ValueType::Decimal && value.kind() != ValueType::Integer {
         return mk_runtime_value(Box::new(NullValue::default()));
@@ -66,7 +68,9 @@ fn trunc(args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn Runt
     }
 
     let arg = args.get(0).unwrap();
-    let value = arg.lock().unwrap();
+    let value = arg
+        .lock()
+        .expect("math.trunc: failed to get first argument");
 
     if value.kind() != ValueType::Decimal && value.kind() != ValueType::Integer {
         return mk_runtime_value(Box::new(NullValue::default()));
@@ -87,7 +91,9 @@ fn round(args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn Runt
     }
 
     let arg = args.get(0).unwrap();
-    let value = arg.lock().unwrap();
+    let value = arg
+        .lock()
+        .expect("math.round: failed to get first argument");
 
     if value.kind() != ValueType::Decimal && value.kind() != ValueType::Integer {
         return mk_runtime_value(Box::new(NullValue::default()));
@@ -107,8 +113,16 @@ fn pow(args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn Runtim
         return mk_runtime_value(Box::new(NullValue::default()));
     }
 
-    let target_val = args.get(0).unwrap().lock().unwrap();
-    let factor_val = args.get(1).unwrap().lock().unwrap();
+    let target_val = args
+        .get(0)
+        .unwrap()
+        .lock()
+        .expect("math.pow: failed to get first argument");
+    let factor_val = args
+        .get(1)
+        .unwrap()
+        .lock()
+        .expect("math.pow: failed to get second argument");
 
     if target_val.kind() != ValueType::Decimal && target_val.kind() != ValueType::Integer {
         return mk_runtime_value(Box::new(NullValue::default()));
@@ -146,7 +160,7 @@ fn sqrt(args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Arc<Mutex<Box<dyn Runti
     }
 
     let arg = args.get(0).unwrap();
-    let value = arg.lock().unwrap();
+    let value = arg.lock().expect("math.sqrt: failed to get first argument");
 
     if value.kind() != ValueType::Decimal && value.kind() != ValueType::Integer {
         return mk_runtime_value(Box::new(NullValue::default()));

@@ -11,7 +11,11 @@ pub fn native_type_of(
         return mk_runtime_value(Box::new(NullValue::default()));
     }
 
-    let arg = args.get(0).unwrap().lock().unwrap();
+    let arg = args
+        .get(0)
+        .unwrap()
+        .lock()
+        .expect("type_of: failed to get argument");
 
     let value_type: String = match arg.kind() {
         ValueType::Array => "array".into(),

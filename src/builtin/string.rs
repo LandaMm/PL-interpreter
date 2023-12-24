@@ -17,7 +17,11 @@ pub fn get_char(value: StringValue) -> ClosureType {
                 return mk_runtime_value(Box::new(NullValue::default()));
             }
 
-            let arg = args.get(0).unwrap().lock().unwrap();
+            let arg = args
+                .get(0)
+                .unwrap()
+                .lock()
+                .expect("string.get_char: failed to get argument");
 
             if arg.kind() != ValueType::Integer {
                 return mk_runtime_value(Box::new(NullValue::default()));
@@ -45,7 +49,7 @@ pub fn concat(value: StringValue) -> ClosureType {
         move |args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>| {
             let mut result = String::from(value.value());
             for arg in args {
-                let value = arg.lock().unwrap();
+                let value = arg.lock().expect("string.concat: failed to get argument");
                 if value.kind() != ValueType::String {
                     // TODO: raise type error
                     continue;
@@ -66,7 +70,11 @@ pub fn substr(value: StringValue) -> ClosureType {
                 return mk_runtime_value(Box::new(NullValue::default()));
             }
 
-            let skip_val = args.get(0).unwrap().lock().unwrap();
+            let skip_val = args
+                .get(0)
+                .unwrap()
+                .lock()
+                .expect("string.substr: failed to get argument");
 
             if skip_val.kind() != ValueType::Integer {
                 return mk_runtime_value(Box::new(NullValue::default()));
@@ -83,7 +91,13 @@ pub fn substr(value: StringValue) -> ClosureType {
                     value.value().chars().count() as isize - skip.value() as isize,
                 ))
             } else {
-                dyn_clone::clone_box(&**args.get(1).unwrap().lock().unwrap())
+                dyn_clone::clone_box(
+                    &**args
+                        .get(1)
+                        .unwrap()
+                        .lock()
+                        .expect("string.substr: failed to get second argument"),
+                )
             };
 
             if take_val.kind() != ValueType::Integer {
@@ -166,13 +180,21 @@ pub fn replace(value: StringValue) -> ClosureType {
                 return mk_runtime_value(Box::new(NullValue::default()));
             }
 
-            let search_val = args.get(0).unwrap().lock().unwrap();
+            let search_val = args
+                .get(0)
+                .unwrap()
+                .lock()
+                .expect("string.replace: failed to get argument");
 
             if search_val.kind() != ValueType::String {
                 return mk_runtime_value(Box::new(NullValue::default()));
             }
 
-            let replace_val = args.get(1).unwrap().lock().unwrap();
+            let replace_val = args
+                .get(1)
+                .unwrap()
+                .lock()
+                .expect("string.replace: failed to get second argument");
 
             if replace_val.kind() != ValueType::String {
                 return mk_runtime_value(Box::new(NullValue::default()));
@@ -195,7 +217,11 @@ pub fn split(value: StringValue) -> ClosureType {
                 return mk_runtime_value(Box::new(NullValue::default()));
             }
 
-            let split_val = args.get(0).unwrap().lock().unwrap();
+            let split_val = args
+                .get(0)
+                .unwrap()
+                .lock()
+                .expect("string.split: failed to get argument");
 
             if split_val.kind() != ValueType::String {
                 return mk_runtime_value(Box::new(NullValue::default()));

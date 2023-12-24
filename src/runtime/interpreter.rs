@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 use pl_ast::{AssignmentOperator, BinaryOperator, LogicalOperator, Node, UnaryOperator};
 
 use crate::{
-    cast_value, get_number_object, get_string_object,
+    cast_value, get_array_object, get_number_object, get_string_object,
     macros::bail,
     stringify,
     values::{DecimalValue, IntegerValue, NullValue, RuntimeValue, ValueType},
@@ -156,7 +156,7 @@ impl Interpreter {
             node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
         };
 
-        let v = value.lock().unwrap();
+        let v = value.lock().expect("resolve: failed to clone value");
         let res = Arc::new(Mutex::new(dyn_clone::clone_box(&**v)));
 
         Ok(res)
@@ -169,7 +169,9 @@ impl Interpreter {
         env_id: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         let condition_resolved = self.resolve(condition.clone(), env_id)?;
-        let condition_innner = condition_resolved.lock().unwrap();
+        let condition_innner = condition_resolved
+            .lock()
+            .expect("while_statement: failed to get condition");
         if condition_innner.kind() != ValueType::Boolean {
             bail!(InterpreterError::InvalidCondition(dyn_clone::clone_box(
                 &**condition_innner
@@ -181,7 +183,9 @@ impl Interpreter {
             self.resolve(body.clone(), env_id)?;
 
             let condition_resolved = self.resolve(condition.clone(), env_id)?;
-            let condition_innner = condition_resolved.lock().unwrap();
+            let condition_innner = condition_resolved
+                .lock()
+                .expect("while_statement: failed to get further condition");
             if condition_innner.kind() != ValueType::Boolean {
                 bail!(InterpreterError::InvalidCondition(dyn_clone::clone_box(
                     &**condition_innner
@@ -205,7 +209,9 @@ impl Interpreter {
         match super_class {
             Some(id) => {
                 let resolved = self.resolve(id, env)?;
-                let target = resolved.lock().unwrap();
+                let target = resolved
+                    .lock()
+                    .expect("class_declaration: failed to resolve super class");
                 if target.kind() == ValueType::Class {
                     let target_class = cast_value::<ClassValue>(&target).unwrap();
                     class.copy_properties(&target_class);
@@ -249,7 +255,9 @@ impl Interpreter {
             };
         }
         let scope_c = SCOPE_STATE.clone();
-        let mut scope_state = scope_c.lock().unwrap();
+        let mut scope_state = scope_c
+            .lock()
+            .expect("class_declaration: failed to get mutable scope state");
         let scope = match scope_state.get_scope_mut(env) {
             Some(scope) => scope,
             None => bail!(InterpreterError::UnresolvedEnvironment(env)),
@@ -280,7 +288,9 @@ impl Interpreter {
         };
 
         let prop = property.clone();
-        let property_inner = prop.lock().unwrap();
+        let property_inner = prop
+            .lock()
+            .expect("member_expression: failed to get property");
         if property_inner.kind() != ValueType::String {
             bail!(InterpreterError::UnsupportedValue(property))
         }
@@ -288,7 +298,7 @@ impl Interpreter {
         let key = cast_value::<StringValue>(&property_inner).unwrap().value();
 
         let obj = object.clone();
-        let object_inner = obj.lock().unwrap();
+        let object_inner = obj.lock().expect("member_expression: failed to get object");
         let value = match object_inner.kind() {
             ValueType::Object => dyn_clone::clone_box(&**object_inner),
             ValueType::Class => {
@@ -330,6 +340,10 @@ impl Interpreter {
                 let number = dyn_clone::clone_box(&**object_inner);
                 get_number_object(&number)
             }
+            ValueType::Array => {
+                let array_value = cast_value::<ArrayValue>(&object_inner).unwrap();
+                get_array_object(&array_value, &key, env)?
+            }
             _ => bail!(InterpreterError::UnexpectedValue(dyn_clone::clone_box(
                 &**object_inner
             ))),
@@ -356,7 +370,9 @@ impl Interpreter {
         let result: Arc<Mutex<Box<dyn RuntimeValue>>> = match operator {
             UnaryOperator::Plus => target,
             UnaryOperator::Minus => {
-                let target = target.lock().unwrap();
+                let target = target
+                    .lock()
+                    .expect("unary_expression: failed to get target for converting to negative");
                 match target.kind() {
                     ValueType::Decimal => {
                         let value = cast_value::<DecimalValue>(&target).unwrap();
@@ -372,7 +388,9 @@ impl Interpreter {
                 }
             }
             UnaryOperator::Negation => {
-                let target = target.lock().unwrap();
+                let target = target
+                    .lock()
+                    .expect("unary_expression: failed to get target for negation");
                 match target.kind() {
                     ValueType::Boolean => {
                         let value = cast_value::<BoolValue>(&target).unwrap();
@@ -394,7 +412,9 @@ impl Interpreter {
         env_id: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         let condition = self.resolve(condition, env_id)?;
-        let condition = condition.lock().unwrap();
+        let condition = condition
+            .lock()
+            .expect("if_statement: failed to get condition");
         if condition.kind() != ValueType::Boolean {
             bail!(InterpreterError::InvalidCondition(dyn_clone::clone_box(
                 &**condition
@@ -443,7 +463,9 @@ impl Interpreter {
         let function = FunctionValue::new(name.clone(), parameters, env, body);
 
         let scope_c = SCOPE_STATE.clone();
-        let mut scope_state = scope_c.lock().unwrap();
+        let mut scope_state = scope_c
+            .lock()
+            .expect("function_declaration: failed to get mutable scope state");
         let scope = match scope_state.get_scope_mut(env) {
             Some(scope) => scope,
             None => bail!(InterpreterError::UnresolvedEnvironment(env)),
@@ -471,7 +493,9 @@ impl Interpreter {
         }
         let func = cast_value::<FunctionValue>(&callee_inner).unwrap();
 
-        let mut scope_state = SCOPE_STATE.lock().unwrap();
+        let mut scope_state = SCOPE_STATE
+            .lock()
+            .expect("class_call: failed to get mutable scope state");
         let env_id = scope_state.create_environment(Some(func.declaration_env));
         let scope = scope_state.get_scope_mut(env_id).unwrap();
         scope.declare_variable("self".into(), Arc::new(Mutex::new(obj)), true)?;
@@ -501,7 +525,9 @@ impl Interpreter {
         }
         drop(scope_state);
         let value = self.resolve(func.body, env_id)?;
-        let scope_state = SCOPE_STATE.lock().unwrap();
+        let scope_state = SCOPE_STATE
+            .lock()
+            .expect("class_call: failed to get scope state");
         let scope = scope_state.get_scope(env_id).unwrap();
         let new_self = scope.lookup_variable("self".into(), &scope_state)?;
         drop(scope_state);
@@ -524,7 +550,9 @@ impl Interpreter {
                             _ => bail!(InterpreterError::UnsupportedNode(current)),
                         }
                     };
-                    let prop_inner = prop.lock().unwrap();
+                    let prop_inner = prop
+                        .lock()
+                        .expect("class_call: failed to get prop of member expression");
                     if prop_inner.kind() != ValueType::String {
                         bail!(InterpreterError::UnsupportedValue(Arc::new(Mutex::new(
                             dyn_clone::clone_box(&**prop_inner)
@@ -533,7 +561,7 @@ impl Interpreter {
                     let prop_str = cast_value::<StringValue>(&prop_inner).unwrap();
 
                     let obj_val = self.resolve(parent.clone(), env)?;
-                    let obj_inner = obj_val.lock().unwrap();
+                    let obj_inner = obj_val.lock().expect("class_call: failed to get parent");
                     if obj_inner.kind() == ValueType::Object {
                         let mut obj = cast_value::<ObjectValue>(&obj_inner).unwrap();
                         obj.assign_property(prop_str.value(), assign_value.clone());
@@ -558,27 +586,43 @@ impl Interpreter {
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         let mut args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>> = vec![];
         for arg in arguments {
+            println!("resolving arg: {arg:#?}");
             let value = self.resolve(arg, env)?;
+            println!("value: {value:#?}");
             args.push(value);
         }
         if let Node::MemberExpression(object, property, _computed) =
             *dyn_clone::clone_box(&*callee.clone())
         {
             let object_value = self.resolve(object.clone(), env)?;
-            let obj = object_value.lock().unwrap();
-            if obj.kind() == ValueType::Object {
-                let class_obj = cast_value::<ObjectValue>(&obj).unwrap();
-                if let Node::Identifier(func_name) = *property {
+            let obj = object_value
+                .lock()
+                .expect("call_expression: failed to get object from member expression");
+            // TODO: add other extendable types, e.g. string
+            if let Node::Identifier(func_name) = *property {
+                if obj.kind() == ValueType::Object || obj.kind() == ValueType::Array {
+                    let class_obj = match obj.kind() {
+                        ValueType::Object => cast_value::<ObjectValue>(&obj).unwrap(),
+                        ValueType::Array => {
+                            let arr = cast_value::<ArrayValue>(&obj).unwrap();
+                            get_array_object(&arr, &func_name, env)?
+                        }
+                        _ => bail!(InterpreterError::UnexpectedValue(dyn_clone::clone_box(
+                            &**obj
+                        ))),
+                    };
                     let calle = class_obj.get_property(func_name.clone());
                     if calle.is_none() {
                         bail!(InterpreterError::UnresolvedProperty(func_name.clone()))
                     }
                     let calle_res = calle.unwrap();
-                    let fn_callee = calle_res.lock().unwrap();
-                    if obj.kind() == ValueType::Object && fn_callee.kind() == ValueType::Function {
+                    let fn_callee = calle_res
+                        .lock()
+                        .expect("call_expression: failed to get class method as function");
+                    if fn_callee.kind() == ValueType::Function {
                         return Ok(self.eval_class_call(
                             object,
-                            dyn_clone::clone_box(&**obj),
+                            dyn_clone::clone_box(&*class_obj),
                             dyn_clone::clone_box(&**fn_callee),
                             args,
                             env,
@@ -590,7 +634,9 @@ impl Interpreter {
         let fn_callee = self.resolve(callee, env)?;
 
         let fn_calle_c = fn_callee.clone();
-        let fn_callee_box = fn_calle_c.lock().unwrap();
+        let fn_callee_box = fn_calle_c
+            .lock()
+            .expect("call_expression: failed to get function calle");
         let result: Arc<Mutex<Box<dyn RuntimeValue>>> = match fn_callee_box.kind().clone() {
             ValueType::NativeFn => {
                 let native_fn = match fn_callee_box.into_any().downcast::<NativeFnValue>() {
@@ -613,7 +659,9 @@ impl Interpreter {
                 drop(func);
                 drop(fn_callee_box);
                 drop(fn_callee);
-                let mut scope_state = SCOPE_STATE.lock().unwrap();
+                let mut scope_state = SCOPE_STATE
+                    .lock()
+                    .expect("call_expression: failed to get scope state for function");
                 let env_id = scope_state.create_environment(Some(func_c.declaration_env));
                 let scope = scope_state.get_scope_mut(env_id).unwrap();
                 let init_args = func_c.parameters.clone();
@@ -708,7 +756,9 @@ impl Interpreter {
                     }
 
                     let obj = ObjectValue::from(instance_map);
-                    let mut scope_state = SCOPE_STATE.lock().unwrap();
+                    let mut scope_state = SCOPE_STATE
+                        .lock()
+                        .expect("call_expression: failed to get scope state from class object");
                     // TODO: look if we use correct environment
                     let env_id = scope_state.create_environment(Some(env));
                     let scope = scope_state.get_scope_mut(env_id).unwrap();
@@ -763,7 +813,7 @@ impl Interpreter {
                     }
                     drop(scope_state);
                     self.resolve(constructor.body.clone(), env_id)?;
-                    let scope_state = SCOPE_STATE.lock().unwrap();
+                    let scope_state = SCOPE_STATE.lock().expect("call_expression: failed to get immutable scope state after class method call");
                     let scope = scope_state.get_scope(env_id).unwrap();
                     let value = scope.lookup_variable("self".into(), &scope_state)?;
                     value
@@ -814,7 +864,9 @@ impl Interpreter {
                         .value()
                         .into_iter()
                         .map(|x| {
-                            self.convert_value_to_node(dyn_clone::clone_box(&**x.lock().unwrap()))
+                            self.convert_value_to_node(dyn_clone::clone_box(
+                                &**x.lock().expect("convert_value: failed to get array item"),
+                            ))
                         })
                         .collect::<Vec<Box<Node>>>(),
                 )
@@ -836,8 +888,16 @@ impl Interpreter {
             LogicalOperator::And => {
                 let left = self.resolve(left, env)?;
                 let right = self.resolve(right, env)?;
-                let left_value = dyn_clone::clone_box(&**left.lock().unwrap());
-                let right_value = dyn_clone::clone_box(&**right.lock().unwrap());
+                let left_value = dyn_clone::clone_box(
+                    &**left
+                        .lock()
+                        .expect("logical_expression: failed to get left side for AND operator"),
+                );
+                let right_value = dyn_clone::clone_box(
+                    &**right
+                        .lock()
+                        .expect("logical_expression: failed to get right side for AND operator"),
+                );
                 if left_value.kind() != ValueType::Boolean {
                     bail!(InterpreterError::InvalidValue(
                         left_value,
@@ -861,8 +921,16 @@ impl Interpreter {
             LogicalOperator::Or => {
                 let left = self.resolve(left, env)?;
                 let right = self.resolve(right, env)?;
-                let left_value = dyn_clone::clone_box(&**left.lock().unwrap());
-                let right_value = dyn_clone::clone_box(&**right.lock().unwrap());
+                let left_value = dyn_clone::clone_box(
+                    &**left
+                        .lock()
+                        .expect("logical_expression: failed to get left side for OR operator"),
+                );
+                let right_value = dyn_clone::clone_box(
+                    &**right
+                        .lock()
+                        .expect("logical_expression: failed to get right side for OR operator"),
+                );
                 if left_value.kind() != ValueType::Boolean {
                     bail!(InterpreterError::InvalidValue(
                         left_value,
@@ -893,7 +961,9 @@ impl Interpreter {
         env: EnvironmentId,
         ignore_constant: bool,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        let mut scope_state = SCOPE_STATE.lock().unwrap();
+        let mut scope_state = SCOPE_STATE
+            .lock()
+            .expect("assign_variable: failed to get scope state");
         Ok(scope_state.assign_variable(name, value, env, ignore_constant)?)
     }
 
@@ -906,7 +976,9 @@ impl Interpreter {
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         if let Node::MemberExpression(object, property, computed) = *left {
             let obj_val = self.resolve(object.clone(), env)?;
-            let obj_inner = obj_val.lock().unwrap();
+            let obj_inner = obj_val
+                .lock()
+                .expect("assignment_expression: failed to get member expression's object");
             match obj_inner.kind() {
                 ValueType::Object => {
                     let mut obj = cast_value::<ObjectValue>(&obj_inner).unwrap();
@@ -920,7 +992,9 @@ impl Interpreter {
                             _ => bail!(InterpreterError::UnsupportedNode(property)),
                         }
                     };
-                    let prop_inner = prop.lock().unwrap();
+                    let prop_inner = prop.lock().expect(
+                        "assignment_expression: failed to get property of member expression",
+                    );
                     if prop_inner.kind() != ValueType::String {
                         bail!(InterpreterError::UnsupportedValue(prop.clone()))
                     }
@@ -948,7 +1022,7 @@ impl Interpreter {
                     let previous_value_opt = obj_map.get(&prop_name);
                     if let Some(previous_value) = previous_value_opt {
                         let left = self.convert_value_to_node(dyn_clone::clone_box(
-                            &**previous_value.lock().unwrap(),
+                            &**previous_value.lock().expect("assignment_expression: failed to get previous value for converting"),
                         ));
                         let binary_op = match operator {
                             AssignmentOperator::Addition => BinaryOperator::Plus,
@@ -989,7 +1063,9 @@ impl Interpreter {
                             _ => bail!(InterpreterError::UnsupportedNode(property)),
                         }
                     };
-                    let prop_inner = prop.lock().unwrap();
+                    let prop_inner = prop
+                        .lock()
+                        .expect("assignment_expression: failed to get property of class");
                     if prop_inner.kind() != ValueType::String {
                         bail!(InterpreterError::UnsupportedValue(prop.clone()))
                     }
@@ -1020,7 +1096,9 @@ impl Interpreter {
                     let previous_value_opt = class.get_static_property(prop_name.clone());
                     if let Some(previous_value) = previous_value_opt {
                         let left = self.convert_value_to_node(dyn_clone::clone_box(
-                            &**previous_value.value.lock().unwrap(),
+                            &**previous_value.value.lock().expect(
+                                "assignment_expression: failed to get previous value of class for converting",
+                            ),
                         ));
                         let binary_op = match operator {
                             AssignmentOperator::Addition => BinaryOperator::Plus,
@@ -1065,12 +1143,16 @@ impl Interpreter {
                     self.assign_variable(variable_name.clone(), right, env, false)?
                 }
                 assignment_operator => {
-                    let scope_state = SCOPE_STATE.lock().unwrap();
+                    let scope_state = SCOPE_STATE.lock().expect(
+                        "assignment_expression: failed to get scope state for non-equals operator",
+                    );
                     let scope = scope_state.get_scope(env).unwrap();
                     let previous_value =
                         scope.lookup_variable(variable_name.clone(), &scope_state)?;
                     let left = self.convert_value_to_node(dyn_clone::clone_box(
-                        &**previous_value.lock().unwrap(),
+                        &**previous_value.lock().expect(
+                            "assignment_expression: failed to get previous value for left operand",
+                        ),
                     ));
                     let operator = match assignment_operator {
                         AssignmentOperator::Addition => BinaryOperator::Plus,
@@ -1107,7 +1189,9 @@ impl Interpreter {
         };
 
         let scope_c = SCOPE_STATE.clone();
-        let mut scope_state = scope_c.lock().unwrap();
+        let mut scope_state = scope_c
+            .lock()
+            .expect("variable_declaration: failed to get scope state");
         let scope = match scope_state.get_scope_mut(env) {
             Some(scope) => scope,
             None => bail!(InterpreterError::UnresolvedEnvironment(env)),
@@ -1124,12 +1208,18 @@ impl Interpreter {
         identifier: String,
         env: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        let scope_state = SCOPE_STATE.lock().unwrap();
+        println!("getting scope_state for identifier: {identifier:#?}");
+        let scope_state = SCOPE_STATE
+            .lock()
+            .expect("identifier: failed to get immutable scope state");
+        println!("got scope_state");
         let scope = match scope_state.get_scope(env) {
             Some(scope) => scope,
             None => bail!(InterpreterError::UnresolvedEnvironment(env)),
         };
+        println!("scope: {scope:#?}");
         let val = scope.lookup_variable(identifier, &scope_state)?;
+        println!("val: {val:#?}");
         drop(scope_state);
         Ok(val)
     }
@@ -1314,8 +1404,12 @@ impl Interpreter {
         right: Arc<Mutex<Box<dyn RuntimeValue>>>,
         operator: BinaryOperator,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        let left = left.lock().unwrap();
-        let right = right.lock().unwrap();
+        let left = left
+            .lock()
+            .expect("numeric_binary_expression: failed to get left");
+        let right = right
+            .lock()
+            .expect("numeric_binary_expression: failed to get right");
         if left.kind() == ValueType::Decimal || right.kind() == ValueType::Decimal {
             // we are trying to add 1-2 decimals -> will get decimal
             let left = self.get_decimal_value(dyn_clone::clone_box(&**left))?;
@@ -1347,8 +1441,12 @@ impl Interpreter {
         right: Arc<Mutex<Box<dyn RuntimeValue>>>,
         operator: BinaryOperator,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        let left = left.lock().unwrap();
-        let right = right.lock().unwrap();
+        let left = left
+            .lock()
+            .expect("string_binary_expression: failed to get left");
+        let right = right
+            .lock()
+            .expect("string_binary_expression: failed to get right");
 
         let left_str = cast_value::<StringValue>(&left).unwrap();
         let right_str = cast_value::<StringValue>(&right).unwrap();
@@ -1373,9 +1471,11 @@ impl Interpreter {
             let left = self.resolve(left, env)?;
             let right = self.resolve(right_node, env)?;
 
-            let left_inn = left.lock().unwrap();
+            let left_inn = left.lock().expect("binary_expression: failed to get left");
             let left_kind = dyn_clone::clone_box(&**left_inn).kind();
-            let right_inn = right.lock().unwrap();
+            let right_inn = right
+                .lock()
+                .expect("binary_expression: failed to get right");
             let right_kind = dyn_clone::clone_box(&**right_inn).kind();
             drop(left_inn);
             drop(right_inn);

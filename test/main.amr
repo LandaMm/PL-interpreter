@@ -1,6 +1,12 @@
 
-fn pretty_print(msg, mode) {
-  print("[".concat(mode, "]"), msg)
+
+class Array {
+  fn size() {
+    print(self)
+    return self.length
+  }
 }
 
-pretty_print("hello!", "INFO")
+let arr = [1, 2, 3]
+
+let s = arr.size()

@@ -12,7 +12,7 @@ pub fn native_print_function(
         "{}",
         args.into_iter()
             .map(|arg| {
-                let val = arg.lock().unwrap();
+                let val = arg.lock().expect("native_print: failed to get argument");
                 let cloned = dyn_clone::clone_box(&**val);
                 stringify(cloned)
             })

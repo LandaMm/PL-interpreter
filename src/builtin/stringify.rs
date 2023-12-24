@@ -84,13 +84,23 @@ pub fn stringify(value: Box<dyn RuntimeValue>) -> String {
                     .value()
                     .into_iter()
                     .map(|x| {
-                        if x.lock().unwrap().kind() == ValueType::String {
+                        if x.lock()
+                            .expect("stringify: failed to get array item")
+                            .kind()
+                            == ValueType::String
+                        {
                             format!(
                                 "\"{}\"",
-                                stringify(dyn_clone::clone_box(&**x.lock().unwrap()))
+                                stringify(dyn_clone::clone_box(
+                                    &**x.lock()
+                                        .expect("stringify: failed to get string array item")
+                                ))
                             )
                         } else {
-                            stringify(dyn_clone::clone_box(&**x.lock().unwrap()))
+                            stringify(dyn_clone::clone_box(
+                                &**x.lock()
+                                    .expect("stringify: failed to stringify other type array item"),
+                            ))
                         }
                     })
                     .collect::<Vec<String>>()
@@ -108,7 +118,9 @@ pub fn stringify(value: Box<dyn RuntimeValue>) -> String {
             for (key, value) in object.map().iter().take(OBJECT_MAX_ITEMS) {
                 map.insert(
                     key.clone(),
-                    stringify(dyn_clone::clone_box(&**value.lock().unwrap())),
+                    stringify(dyn_clone::clone_box(
+                        &**value.lock().expect("stringify: failed to get object value"),
+                    )),
                 );
             }
 

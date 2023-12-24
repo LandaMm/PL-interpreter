@@ -27,7 +27,7 @@ impl WithFnCall<ClosureType> {
         &self,
         args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>,
     ) -> Arc<Mutex<Box<dyn RuntimeValue>>> {
-        (self.fc.lock().unwrap())(args)
+        (self.fc.lock().expect("with_fn_call: failed to get fc"))(args)
     }
 }
 

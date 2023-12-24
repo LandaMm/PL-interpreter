@@ -16,7 +16,7 @@ pub struct ClassProperty {
 
 impl Clone for ClassProperty {
     fn clone(&self) -> Self {
-        let value = self.value.lock().unwrap();
+        let value = self.value.lock().expect("class_clone: failed to get value");
         Self {
             name: self.name.clone(),
             value: Arc::new(Mutex::new(dyn_clone::clone_box(&**value))),
@@ -35,7 +35,9 @@ impl Clone for ClassMethodParameter {
     fn clone(&self) -> Self {
         let default_value: Option<Arc<Mutex<Box<dyn RuntimeValue>>>> = match &self.default_value {
             Some(value) => {
-                let value = value.lock().unwrap();
+                let value = value
+                    .lock()
+                    .expect("meth_param_clone: failed to get default value");
                 Some(Arc::new(Mutex::new(dyn_clone::clone_box(&**value))))
             }
             None => None,

@@ -13,7 +13,9 @@ impl Clone for ArrayValue {
         let mut cloned_value: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>> = vec![];
         for value in self.value.as_slice() {
             cloned_value.push(Arc::new(Mutex::new(dyn_clone::clone_box(
-                &**value.lock().unwrap(),
+                &**value
+                    .lock()
+                    .expect("array_clone: failed to get value of slice"),
             ))));
         }
         Self {
@@ -47,9 +49,15 @@ impl ArrayValue {
         let mut cloned_value: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>> = vec![];
         for value in self.value.as_slice() {
             cloned_value.push(Arc::new(Mutex::new(dyn_clone::clone_box(
-                &**value.lock().unwrap(),
+                &**value
+                    .lock()
+                    .expect("array.value(): failed to get value of slice"),
             ))));
         }
         cloned_value
+    }
+
+    pub fn append_element(&mut self, element: Arc<Mutex<Box<dyn RuntimeValue>>>) {
+        self.value.push(element)
     }
 }

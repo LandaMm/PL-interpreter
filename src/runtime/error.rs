@@ -61,7 +61,11 @@ impl std::fmt::Display for InterpreterError {
                 write!(
                     f,
                     "Unsupported value: {}",
-                    stringify(dyn_clone::clone_box(&**value.lock().unwrap()))
+                    stringify(dyn_clone::clone_box(
+                        &**value
+                            .lock()
+                            .expect("error: failed to get unsupported value")
+                    ))
                 )
             }
             InterpreterError::UnexpectedValue(value) => {
@@ -94,7 +98,11 @@ impl std::fmt::Display for InterpreterError {
                 write!(
                     f,
                     "Invalid function callee: {:?}",
-                    stringify(dyn_clone::clone_box(&**(value.lock().unwrap())))
+                    stringify(dyn_clone::clone_box(
+                        &**(value
+                            .lock()
+                            .expect("error: failed to get function callee value"))
+                    ))
                 )
             }
             InterpreterError::InvalidFunctionParameter(parameter) => {
