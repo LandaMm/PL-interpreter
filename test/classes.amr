@@ -8,6 +8,18 @@ class Person {
     self.first_name = first_name
     self.last_name = last_name
   }
+
+  fn get_first_name() {
+    return self.first_name
+  }
+
+  fn get_last_name() {
+    return self.last_name
+  }
+
+  fn greet() {
+    print("Hi, I'm ".concat(self.get_first_name(), " ", self.get_last_name(), "!"))
+  }
 }
 
 class Student from Person {
@@ -26,8 +38,5 @@ class Student from Person {
 
 const student = Student("Amir", "Adal", 2024)
 
-print(student)
-
+student.greet()
 student.graduate()
-
-print(student)
