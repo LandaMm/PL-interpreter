@@ -39,7 +39,13 @@ impl ObjectValue {
     }
 
     pub fn get_property(&self, key: Key) -> Option<Value> {
-        self.map.get(&key).cloned()
+        if let Some(property) = self.map.get(&key) {
+            let value = property
+                .lock()
+                .expect("object.get_property(): failed to get property value");
+            return Some(Arc::new(Mutex::new(dyn_clone::clone_box(&**value))));
+        }
+        None
     }
 
     pub fn assign_property(&mut self, key: Key, value: Value) {
