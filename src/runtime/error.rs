@@ -11,6 +11,7 @@ pub enum InterpreterError {
     UnsupportedUnaryOperator(UnaryOperator),
     UnsupportedValue(Arc<Mutex<Box<dyn RuntimeValue>>>),
     UnexpectedNode(Box<Node>),
+    UnexpectedValue(Box<dyn RuntimeValue>),
     ValueCastError(Box<dyn RuntimeValue>, String),
     VariableDeclarationExist(String),
     UnresolvedVariable(String),
@@ -61,6 +62,13 @@ impl std::fmt::Display for InterpreterError {
                     f,
                     "Unsupported value: {}",
                     stringify(dyn_clone::clone_box(&**value.lock().unwrap()))
+                )
+            }
+            InterpreterError::UnexpectedValue(value) => {
+                write!(
+                    f,
+                    "Unexpected value: {}",
+                    stringify(dyn_clone::clone_box(&**value))
                 )
             }
             InterpreterError::VariableDeclarationExist(variable_name) => {

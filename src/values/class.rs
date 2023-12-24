@@ -59,6 +59,7 @@ pub struct ClassMethod {
 pub struct ClassValue {
     kind: ValueType,
     pub name: String,
+    pub super_class: Option<Box<ClassValue>>,
     pub properties: Vec<ClassProperty>,
     pub methods: HashMap<String, ClassMethod>,
 }
@@ -78,6 +79,7 @@ impl Default for ClassValue {
         Self {
             kind: ValueType::Class,
             name: "".to_string(),
+            super_class: None,
             properties: Vec::new(),
             methods: HashMap::new(),
         }
@@ -97,13 +99,21 @@ impl ClassValue {
     }
 
     pub fn copy_properties(&mut self, target_class: &ClassValue) {
-        for property in &target_class.properties {
+        for property in target_class
+            .properties
+            .iter()
+            .filter(|prop| !prop.is_static)
+        {
             self.insert_property(property.clone());
         }
     }
 
     pub fn copy_methods(&mut self, target_class: &ClassValue) {
-        for (_, method) in &target_class.methods {
+        for (_, method) in target_class
+            .methods
+            .iter()
+            .filter(|method| method.0 != "__new__" && !method.1.is_static)
+        {
             self.insert_method(method.clone());
         }
     }

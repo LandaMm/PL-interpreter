@@ -170,6 +170,7 @@ impl Interpreter {
                     let target_class = cast_value::<ClassValue>(&target).unwrap();
                     class.copy_properties(&target_class);
                     class.copy_methods(&target_class);
+                    class.super_class = Some(target_class);
                 }
             }
             None => {}
@@ -291,9 +292,9 @@ impl Interpreter {
                 let number = dyn_clone::clone_box(&**object_inner);
                 get_number_object(&number)
             }
-            _ => bail!(InterpreterError::UnsupportedValue(Arc::new(Mutex::new(
-                dyn_clone::clone_box(&**object_inner)
-            )))),
+            _ => bail!(InterpreterError::UnexpectedValue(dyn_clone::clone_box(
+                &**object_inner
+            ))),
         };
 
         let object = cast_value::<ObjectValue>(&value).unwrap();
@@ -642,9 +643,48 @@ impl Interpreter {
                     }
                     scope.declare_variable(
                         "self".into(),
-                        Arc::new(Mutex::new(Box::new(obj))),
+                        Arc::new(Mutex::new(Box::new(obj.clone()))),
                         true,
                     )?;
+                    if let Some(super_class) = class.super_class {
+                        let super_constructor = super_class.methods.get("__new__");
+                        if super_constructor.is_some() {
+                            let super_constructor = super_constructor.unwrap();
+                            let super_init_args = super_constructor.args.clone();
+
+                            // don't allow default value for first args
+                            // e.g. _(arg1 = null, arg2, arg3) - invalid
+                            // e.g. _(arg1, arg2 = null, arg3) - invalid
+                            //      _(arg1, arg2, arg3 = null) - valid
+                            for (index, arg) in super_init_args.iter().enumerate() {
+                                if arg.default_value.is_some() && index + 1 < super_init_args.len()
+                                {
+                                    bail!(InterpreterError::InvalidDefaultParameter(
+                                        arg.name.clone()
+                                    ))
+                                }
+                            }
+
+                            let super_func = FunctionValue::new(
+                                "super".into(),
+                                super_init_args
+                                    .iter()
+                                    .map(|arg| FunctionParameter {
+                                        name: arg.name.clone(),
+                                        default_value: arg.default_value.clone(),
+                                    })
+                                    .collect(),
+                                env_id,
+                                super_constructor.body.clone(),
+                            );
+
+                            scope.declare_variable(
+                                "super".into(),
+                                Arc::new(Mutex::new(Box::new(super_func))),
+                                true,
+                            )?;
+                        }
+                    }
                     drop(scope_state);
                     self.resolve(constructor.body.clone(), env_id)?;
                     let scope_state = SCOPE_STATE.lock().unwrap();

@@ -1,1 +1,24 @@
 
+
+class Person {
+  first_name = ""
+  last_name = ""
+
+  fn __new__(first_name, last_name) {
+    self.first_name = first_name
+    self.last_name = last_name
+  }
+}
+
+class Student from Person {
+  graduation_year = 0
+
+  fn __new__(first_name, last_name, graduation_year) {
+    super(first_name, last_name)
+    self.graduation_year = graduation_year
+  }
+}
+
+const student = Student("Amir", "Adal", 2024)
+
+print(student)
