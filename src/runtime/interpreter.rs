@@ -586,9 +586,7 @@ impl Interpreter {
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
         let mut args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>> = vec![];
         for arg in arguments {
-            println!("resolving arg: {arg:#?}");
             let value = self.resolve(arg, env)?;
-            println!("value: {value:#?}");
             args.push(value);
         }
         if let Node::MemberExpression(object, property, _computed) =
@@ -1208,18 +1206,14 @@ impl Interpreter {
         identifier: String,
         env: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        println!("getting scope_state for identifier: {identifier:#?}");
         let scope_state = SCOPE_STATE
             .lock()
             .expect("identifier: failed to get immutable scope state");
-        println!("got scope_state");
         let scope = match scope_state.get_scope(env) {
             Some(scope) => scope,
             None => bail!(InterpreterError::UnresolvedEnvironment(env)),
         };
-        println!("scope: {scope:#?}");
         let val = scope.lookup_variable(identifier, &scope_state)?;
-        println!("val: {val:#?}");
         drop(scope_state);
         Ok(val)
     }
