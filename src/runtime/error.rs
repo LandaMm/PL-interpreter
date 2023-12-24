@@ -20,11 +20,11 @@ pub enum InterpreterError {
     InvalidAssignFactor(Box<Node>),
     InvalidFunctionCallee(Arc<Mutex<Box<dyn RuntimeValue>>>),
     InvalidFunctionParameter(Box<Node>),
-    InvalidFunctionEnvironment(EnvironmentId),
     InvalidCondition(Box<dyn RuntimeValue>),
     InvalidValue(Box<dyn RuntimeValue>, String),
     InvalidDefaultParameter(String),
     InvalidParameterCount(usize, usize),
+    UnresolvedEnvironment(EnvironmentId),
 }
 
 impl std::fmt::Display for InterpreterError {
@@ -100,13 +100,6 @@ impl std::fmt::Display for InterpreterError {
             InterpreterError::InvalidFunctionParameter(parameter) => {
                 write!(f, "Invalid parameter provided in function: {parameter:?}")
             }
-            InterpreterError::InvalidFunctionEnvironment(env_id) => {
-                write!(
-                    f,
-                    "Environment (scope) for function is not found with given id: {:?}",
-                    env_id
-                )
-            }
             InterpreterError::InvalidCondition(condition) => {
                 write!(
                     f,
@@ -138,6 +131,9 @@ impl std::fmt::Display for InterpreterError {
             }
             InterpreterError::UnresolvedProperty(property) => {
                 write!(f, "Unresolved property: {}", property)
+            }
+            Self::UnresolvedEnvironment(env) => {
+                write!(f, "Unresolved environment: {}", env)
             }
         }
     }

@@ -252,8 +252,7 @@ impl Interpreter {
         let mut scope_state = scope_c.lock().unwrap();
         let scope = match scope_state.get_scope_mut(env) {
             Some(scope) => scope,
-            // TODO: return correct error
-            None => bail!(InterpreterError::InvalidFunctionEnvironment(env)),
+            None => bail!(InterpreterError::UnresolvedEnvironment(env)),
         };
         let result =
             scope.declare_variable(name, Arc::new(Mutex::new(Box::new(class.clone()))), true)?;
@@ -448,7 +447,7 @@ impl Interpreter {
         let mut scope_state = scope_c.lock().unwrap();
         let scope = match scope_state.get_scope_mut(env) {
             Some(scope) => scope,
-            None => bail!(InterpreterError::InvalidFunctionEnvironment(env)),
+            None => bail!(InterpreterError::UnresolvedEnvironment(env)),
         };
 
         let value =
@@ -1074,7 +1073,7 @@ impl Interpreter {
         let mut scope_state = scope_c.lock().unwrap();
         let scope = match scope_state.get_scope_mut(env) {
             Some(scope) => scope,
-            None => bail!(InterpreterError::InvalidFunctionEnvironment(env)),
+            None => bail!(InterpreterError::UnresolvedEnvironment(env)),
         };
 
         let value = scope.declare_variable(variable_name.clone(), value, is_constant)?;
@@ -1091,7 +1090,7 @@ impl Interpreter {
         let scope_state = SCOPE_STATE.lock().unwrap();
         let scope = match scope_state.get_scope(env) {
             Some(scope) => scope,
-            None => bail!(InterpreterError::InvalidFunctionEnvironment(env)),
+            None => bail!(InterpreterError::UnresolvedEnvironment(env)),
         };
         let val = scope.lookup_variable(identifier, &scope_state)?;
         drop(scope_state);
@@ -1324,10 +1323,7 @@ impl Interpreter {
                 )))))
             }
             // TODO: maybe adding string concatination as Plus?
-            // FIXME: throw appropriate error here
-            _ => bail!(InterpreterError::InvalidCondition(dyn_clone::clone_box(
-                &**left
-            ))),
+            op => bail!(InterpreterError::UnsupportedBinaryOperator(op)),
         }
     }
 
@@ -1347,7 +1343,6 @@ impl Interpreter {
             drop(left_inn);
             drop(right_inn);
 
-            // TODO: add support for data type conversion, e.g. number.toString() + String
             if (left_kind == ValueType::Integer || left_kind == ValueType::Decimal)
                 && (right_kind == ValueType::Integer || right_kind == ValueType::Decimal)
             {
