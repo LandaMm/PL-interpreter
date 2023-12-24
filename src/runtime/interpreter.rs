@@ -44,6 +44,9 @@ impl Interpreter {
             Node::IfStatement(condition, body, alternate) => {
                 self.eval_if_statement(condition, body, alternate, env)?;
             }
+            Node::WhileStatement(condition, consequent) => {
+                self.eval_while_statement(condition, consequent, env)?;
+            }
             Node::CallExpression(calle, args) => {
                 self.eval_call_expression(calle, args, env)?;
             }
@@ -69,6 +72,9 @@ impl Interpreter {
                 }
                 Node::IfStatement(condition, body, alternate) => {
                     self.eval_if_statement(condition, body, alternate, current_env)?;
+                }
+                Node::WhileStatement(condition, consequent) => {
+                    self.eval_while_statement(condition, consequent, current_env)?;
                 }
                 Node::ClassDeclaration(id, super_class, body) => {
                     self.eval_class_declaration(id, super_class, body, current_env)?;
@@ -142,6 +148,9 @@ impl Interpreter {
             Node::IfStatement(condition, body, alternate) => {
                 self.eval_if_statement(condition, body, alternate, env)?
             }
+            Node::WhileStatement(condition, consequent) => {
+                self.eval_while_statement(condition, consequent, env)?
+            }
             Node::CallExpression(calle, args) => self.eval_call_expression(calle, args, env)?,
             Node::ReturnStatement(..) => bail!(InterpreterError::UnexpectedNode(node)),
             node => bail!(InterpreterError::UnsupportedNode(Box::new(node))),
@@ -151,6 +160,37 @@ impl Interpreter {
         let res = Arc::new(Mutex::new(dyn_clone::clone_box(&**v)));
 
         Ok(res)
+    }
+
+    fn eval_while_statement(
+        &mut self,
+        condition: Box<Node>,
+        body: Box<Node>,
+        env_id: EnvironmentId,
+    ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
+        let condition_resolved = self.resolve(condition.clone(), env_id)?;
+        let condition_innner = condition_resolved.lock().unwrap();
+        if condition_innner.kind() != ValueType::Boolean {
+            bail!(InterpreterError::InvalidCondition(dyn_clone::clone_box(
+                &**condition_innner
+            )))
+        }
+
+        let mut boolean = cast_value::<BoolValue>(&condition_innner).unwrap();
+        while boolean.value() {
+            self.resolve(body.clone(), env_id)?;
+
+            let condition_resolved = self.resolve(condition.clone(), env_id)?;
+            let condition_innner = condition_resolved.lock().unwrap();
+            if condition_innner.kind() != ValueType::Boolean {
+                bail!(InterpreterError::InvalidCondition(dyn_clone::clone_box(
+                    &**condition_innner
+                )))
+            }
+            boolean = cast_value::<BoolValue>(&condition_innner).unwrap();
+        }
+
+        return Ok(Arc::new(Mutex::new(Box::new(NullValue::default()))));
     }
 
     fn eval_class_declaration(

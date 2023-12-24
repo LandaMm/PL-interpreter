@@ -1,62 +1,6 @@
 
-class Person {
-  is_adult = false
-  age = 0
-  name = ""
-
-  fn __new__(name, age) {
-    self.name = name
-    self.age = age
-    if self.age > 17 {
-      self.is_adult = true
-    }
-  }
-
-  fn get_age() {
-    return self.age
-  }
-
-  fn set_age(new_age) {
-    self.age = new_age
-    print("new age:", self.age)
-  }
-
-  fn greet() {
-    print("It's", self.name, "(".concat(String(self.age), ")"))
-  }
+let i = 0
+while i < 10 {
+  print("index:", i)
+  i += 1
 }
-
-class Company {
-  static count = 0
-  boss = null
-  employee = null
-
-  fn __new__(person) {
-    Company.count += 1
-    self.boss = person
-    self.employee = Person("empl", 15)
-  }
-
-  fn fire_empl() {
-    self.employee = null
-  }
-
-  static fn get_count() {
-    return Company.count
-  }
-}
-
-let person = Person("boss", 18)
-
-let company = Company(person)
-
-print(company)
-
-company.boss.greet()
-company.employee.greet()
-
-company.fire_empl()
-
-print(company)
-
-company.employee.greet()
