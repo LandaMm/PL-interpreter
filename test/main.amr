@@ -10,3 +10,4 @@ class Array {
 let arr = [1, 2, 3]
 
 let s = arr.size()
+print("s:", s)
