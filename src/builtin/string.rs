@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    cast_value, ArrayValue, ClosureType, IntegerValue, Key, NullValue, ObjectValue, RuntimeValue,
-    StringValue, Value, ValueType,
+    cast_value, convert_to_string, ArrayValue, ClosureType, IntegerValue, Key, NullValue,
+    ObjectValue, RuntimeValue, StringValue, Value, ValueType,
 };
 
 use super::{mk_native_fn, mk_runtime_value};
@@ -245,6 +245,39 @@ pub fn split(value: StringValue) -> ClosureType {
     ))
 }
 
+pub fn join(value: StringValue) -> ClosureType {
+    Arc::new(Mutex::new(
+        move |args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>| {
+            if args.len() != 1 {
+                return mk_runtime_value(Box::new(NullValue::default()));
+            }
+
+            let join_val = args
+                .get(0)
+                .unwrap()
+                .lock()
+                .expect("string.join: failed to get argument");
+
+            if join_val.kind() != ValueType::Array {
+                return mk_runtime_value(Box::new(NullValue::default()));
+            }
+
+            let array = cast_value::<ArrayValue>(&join_val).unwrap();
+
+            let joined = array
+                .value()
+                .iter()
+                .map(|item| {
+                    convert_to_string(&item.lock().expect("string.join: failed to get array item"))
+                })
+                .collect::<Vec<String>>()
+                .join(&value.value());
+
+            mk_runtime_value(Box::new(StringValue::from(joined)))
+        },
+    ))
+}
+
 pub fn get_string_object(string_value: &StringValue) -> Box<ObjectValue> {
     let mut map: HashMap<Key, Value> = HashMap::new();
 
@@ -302,6 +335,11 @@ pub fn get_string_object(string_value: &StringValue) -> Box<ObjectValue> {
     map.insert(
         "split".to_string(),
         mk_native_fn("string.split".to_string(), split(string_value.clone())),
+    );
+
+    map.insert(
+        "join".to_string(),
+        mk_native_fn("string.join".to_string(), join(string_value.clone())),
     );
 
     map.insert(
