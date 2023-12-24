@@ -480,12 +480,15 @@ impl Interpreter {
     fn eval_class_call(
         &mut self,
         object: Box<Node>,
-        obj_val: Box<dyn RuntimeValue>,
+        // obj_val: Box<dyn RuntimeValue>,
         callee_inner: Box<dyn RuntimeValue>,
         args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>,
         env: EnvironmentId,
     ) -> Result<Arc<Mutex<Box<dyn RuntimeValue>>>, InterpreterError> {
-        let obj = cast_value::<ObjectValue>(&obj_val).unwrap();
+        let obj_value = self.resolve(object.clone(), env)?;
+        let obj_val = obj_value
+            .lock()
+            .expect("class_call: failed to resolve object");
         if callee_inner.kind() != ValueType::Function {
             bail!(InterpreterError::InvalidFunctionCallee(Arc::new(
                 Mutex::new(callee_inner)
@@ -498,7 +501,11 @@ impl Interpreter {
             .expect("class_call: failed to get mutable scope state");
         let env_id = scope_state.create_environment(Some(func.declaration_env));
         let scope = scope_state.get_scope_mut(env_id).unwrap();
-        scope.declare_variable("self".into(), Arc::new(Mutex::new(obj)), true)?;
+        scope.declare_variable(
+            "self".into(),
+            Arc::new(Mutex::new(dyn_clone::clone_box(&**obj_val))),
+            false,
+        )?;
         let init_args = func.parameters.clone();
         // don't allow default value for first args
         // e.g. _(arg1 = null, arg2, arg3) - invalid
@@ -596,8 +603,8 @@ impl Interpreter {
             let obj = object_value
                 .lock()
                 .expect("call_expression: failed to get object from member expression");
-            // TODO: add other extendable types, e.g. string
             if let Node::Identifier(func_name) = *property {
+                // TODO: add other extendable types, e.g. string
                 if obj.kind() == ValueType::Object || obj.kind() == ValueType::Array {
                     let class_obj = match obj.kind() {
                         ValueType::Object => cast_value::<ObjectValue>(&obj).unwrap(),
@@ -620,7 +627,7 @@ impl Interpreter {
                     if fn_callee.kind() == ValueType::Function {
                         return Ok(self.eval_class_call(
                             object,
-                            dyn_clone::clone_box(&*class_obj),
+                            // dyn_clone::clone_box(&*class_obj),
                             dyn_clone::clone_box(&**fn_callee),
                             args,
                             env,
