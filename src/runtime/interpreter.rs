@@ -308,7 +308,6 @@ impl Interpreter {
                                     default_value: arg.default_value.clone(),
                                 })
                                 .collect(),
-                            // TODO: look if correct env
                             env,
                             class_method.body,
                         );
@@ -476,7 +475,26 @@ impl Interpreter {
         let env_id = scope_state.create_environment(Some(func.declaration_env));
         let scope = scope_state.get_scope_mut(env_id).unwrap();
         scope.declare_variable("self".into(), Arc::new(Mutex::new(obj)), true)?;
-        // TODO: validate provided arguments
+        let init_args = func.parameters.clone();
+        // don't allow default value for first args
+        // e.g. _(arg1 = null, arg2, arg3) - invalid
+        // e.g. _(arg1, arg2 = null, arg3) - invalid
+        //      _(arg1, arg2, arg3 = null) - valid
+        for (index, arg) in init_args.iter().enumerate() {
+            if arg.default_value.is_some() && index + 1 < init_args.len() {
+                bail!(InterpreterError::InvalidDefaultParameter(arg.name.clone()))
+            }
+        }
+        let required_args = init_args
+            .iter()
+            .filter(|arg| arg.default_value.is_none())
+            .count();
+        if args.len() < required_args {
+            bail!(InterpreterError::InvalidParameterCount(
+                required_args,
+                args.len()
+            ))
+        }
         for (index, parameter) in func.parameters.iter().enumerate() {
             let value = args.get(index).unwrap().clone();
             scope.declare_variable(parameter.name.clone(), value, true)?;
@@ -598,7 +616,26 @@ impl Interpreter {
                 let mut scope_state = SCOPE_STATE.lock().unwrap();
                 let env_id = scope_state.create_environment(Some(func_c.declaration_env));
                 let scope = scope_state.get_scope_mut(env_id).unwrap();
-                // TODO: validate provided arguments
+                let init_args = func_c.parameters.clone();
+                // don't allow default value for first args
+                // e.g. _(arg1 = null, arg2, arg3) - invalid
+                // e.g. _(arg1, arg2 = null, arg3) - invalid
+                //      _(arg1, arg2, arg3 = null) - valid
+                for (index, arg) in init_args.iter().enumerate() {
+                    if arg.default_value.is_some() && index + 1 < init_args.len() {
+                        bail!(InterpreterError::InvalidDefaultParameter(arg.name.clone()))
+                    }
+                }
+                let required_args = init_args
+                    .iter()
+                    .filter(|arg| arg.default_value.is_none())
+                    .count();
+                if args.len() < required_args {
+                    bail!(InterpreterError::InvalidParameterCount(
+                        required_args,
+                        args.len()
+                    ))
+                }
                 for (index, parameter) in func_c.parameters.iter().enumerate() {
                     let value = args.get(index).unwrap().clone();
                     scope.declare_variable(parameter.name.clone(), value, true)?;
