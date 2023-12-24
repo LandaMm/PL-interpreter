@@ -67,6 +67,21 @@ pub fn get_array_object(
 ) -> Result<Box<ObjectValue>, InterpreterError> {
     let mut map: HashMap<Key, Value> = HashMap::new();
 
+    map.insert(
+        "get".into(),
+        mk_native_fn("array.get".into(), get_by_index(array.clone())),
+    );
+
+    map.insert(
+        "merge".into(),
+        mk_native_fn("array.append".into(), merge(array.clone())),
+    );
+
+    map.insert(
+        "length".into(),
+        mk_runtime_value(Box::new(IntegerValue::from(array.value().len() as isize))),
+    );
+
     let scope_state = SCOPE_STATE
         .lock()
         .expect("get_array_object: failed to get immutable scope state");
@@ -88,7 +103,6 @@ pub fn get_array_object(
                 .iter()
                 .find(|method| method.0 == key && !method.1.is_static);
             if let Some((m_name, method)) = method {
-                let mut temp_map: HashMap<Key, Value> = HashMap::new();
                 let func = FunctionValue::new(
                     m_name.clone(),
                     method
@@ -102,8 +116,7 @@ pub fn get_array_object(
                     env,
                     method.body.clone(),
                 );
-                temp_map.insert(key.clone(), Arc::new(Mutex::new(Box::new(func))));
-                return Ok(Box::new(ObjectValue::from(temp_map)));
+                map.insert(key.clone(), Arc::new(Mutex::new(Box::new(func))));
             }
         } else {
             bail!(InterpreterError::UnexpectedValue(dyn_clone::clone_box(
@@ -111,21 +124,6 @@ pub fn get_array_object(
             )))
         }
     }
-
-    map.insert(
-        "get".into(),
-        mk_native_fn("array.get".into(), get_by_index(array.clone())),
-    );
-
-    map.insert(
-        "merge".into(),
-        mk_native_fn("array.append".into(), merge(array.clone())),
-    );
-
-    map.insert(
-        "length".into(),
-        mk_runtime_value(Box::new(IntegerValue::from(array.value().len() as isize))),
-    );
 
     Ok(Box::new(ObjectValue::from(map)))
 }
