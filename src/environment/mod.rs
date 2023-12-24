@@ -196,7 +196,13 @@ impl Environment {
             return None;
         }
         let env = scope_state.get_scope(env_id.unwrap()).unwrap();
-        env.variables.get(&variable_name).cloned()
+        if let Some(variable) = env.variables.get(&variable_name) {
+            let value = variable
+                .lock()
+                .expect("lookup_variable_safe: failed to get variable value");
+            return Some(Arc::new(Mutex::new(dyn_clone::clone_box(&**value))));
+        }
+        return None;
     }
 
     // pub fn resolve_mut(
