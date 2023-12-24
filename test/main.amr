@@ -2,12 +2,41 @@
 
 class Array {
   fn size() {
-    print(self)
     return self.length
+  }
+
+  fn push(item) {
+    self = self.merge(item)
+  }
+
+  fn for_each(predicate) {
+    let i = 0
+    while i < self.length {
+      predicate(self.get(i))
+      i += 1
+    }
+  }
+
+  fn filter(predicate) {
+    let new_array = []
+    fn callback(item) {
+      if predicate(item) {
+        new_array.push(item)
+      }
+    }
+    self.for_each(callback)
+    return new_array
   }
 }
 
-let arr = [1, 2, 3]
+let arr = [1, 2, "s", true, null, 3]
 
 let s = arr.size()
-print("s:", s)
+arr.push(4)
+s = arr.size()
+
+fn filter_func(item) {
+  return type_of(item) == "number"
+}
+
+print(arr.filter(filter_func))
