@@ -17,8 +17,17 @@ class Student from Person {
     super(first_name, last_name)
     self.graduation_year = graduation_year
   }
+
+  fn graduate() {
+    self.graduation_year = 0
+    print("Graduated!!!")
+  }
 }
 
 const student = Student("Amir", "Adal", 2024)
+
+print(student)
+
+student.graduate()
 
 print(student)
