@@ -4,6 +4,20 @@ use crate::{cast_value, ArrayValue, NullValue, ObjectValue, RuntimeValue, String
 
 use super::{mk_runtime_value, stringify};
 
+pub fn convert_to_string(arg: &Box<dyn RuntimeValue>) -> String {
+    match arg.kind() {
+        ValueType::Array => {
+            let arr = cast_value::<ArrayValue>(&arg).unwrap();
+            format!("<array ({} items)>", arr.value().len())
+        }
+        ValueType::Object => {
+            let obj = cast_value::<ObjectValue>(&arg).unwrap();
+            format!("<object ({} pairs)>", obj.map().len())
+        }
+        _ => stringify(dyn_clone::clone_box(&**arg)),
+    }
+}
+
 pub fn native_string_convert(
     args: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>,
 ) -> Arc<Mutex<Box<dyn RuntimeValue>>> {
@@ -17,17 +31,7 @@ pub fn native_string_convert(
         .lock()
         .expect("string_converter: failed to get first argument");
 
-    let value = match arg.kind() {
-        ValueType::Array => {
-            let arr = cast_value::<ArrayValue>(&arg).unwrap();
-            format!("<array ({} items)>", arr.value().len())
-        }
-        ValueType::Object => {
-            let obj = cast_value::<ObjectValue>(&arg).unwrap();
-            format!("<object ({} pairs)>", obj.map().len())
-        }
-        _ => stringify(dyn_clone::clone_box(&**arg)),
-    };
+    let value = convert_to_string(&arg);
 
     mk_runtime_value(Box::new(StringValue::from(value)))
 }
