@@ -39,4 +39,7 @@ fn filter_func(item) {
   return type_of(item) == "number"
 }
 
-print(arr.filter(filter_func))
+arr = arr.filter(filter_func)
+print(arr)
+
+print(":".join(arr))
