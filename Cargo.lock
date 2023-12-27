@@ -40,6 +40,7 @@ checksum = "302d7ab3130588088d277783b1e2d2e10c9e9e4a16dd9050e6ec93fb3e7048f4"
 [[package]]
 name = "pl_ast"
 version = "0.1.0"
+source = "git+https://github.com/LandaMm/PL.git?branch=lib#1bca70ba623124367614bc6942b81b55a68aa0b9"
 dependencies = [
  "dyn-clone",
 ]
