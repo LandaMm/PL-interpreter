@@ -5,7 +5,10 @@ use std::{
 };
 
 use lazy_static::lazy_static;
-use pl_ast::{AssignmentOperator, BinaryOperator, LogicalOperator, Node, UnaryOperator};
+use pl_ast::{
+    token::{Token, TokenKind},
+    AssignmentOperator, BinaryOperator, Lexer, LogicalOperator, Node, Parser, UnaryOperator,
+};
 
 use crate::{
     cast_value, get_array_object, get_number_object, get_string_object,
@@ -32,6 +35,25 @@ impl Interpreter {
         Self {
             stack: VecDeque::new(),
         }
+    }
+
+    // TODO: change error type to custom error instead of String
+    pub fn run_from_source(source: String, env_id: EnvironmentId) -> Result<(), String> {
+        let mut lexer = Lexer::new(source);
+        lexer.tokenize().map_err(|err| format!("{}", err))?;
+        let mut parser = Parser::new(
+            lexer
+                .tokens
+                .iter()
+                .filter(|token| token.kind() != TokenKind::Newline)
+                .map(|token| dyn_clone::clone_box(&**token))
+                .collect::<Vec<Box<dyn Token>>>(),
+        );
+        let ast = parser.produce_ast().map_err(|err| format!("{}", err))?;
+        let mut interpreter = Interpreter::new();
+        interpreter
+            .run(Box::new(ast), env_id)
+            .map_err(|err| format!("{}", err))
     }
 
     pub fn run(&mut self, node: Box<Node>, env: EnvironmentId) -> Result<(), InterpreterError> {
