@@ -26,11 +26,11 @@ pub use stringify::*;
 pub use time::*;
 pub use type_of::*;
 
-fn mk_runtime_value(value: Box<dyn RuntimeValue>) -> Arc<Mutex<Box<dyn RuntimeValue>>> {
+pub fn mk_runtime_value(value: Box<dyn RuntimeValue>) -> Arc<Mutex<Box<dyn RuntimeValue>>> {
     Arc::new(Mutex::new(value))
 }
 
-fn mk_native_fn(name: String, func: ClosureType) -> Arc<Mutex<Box<dyn RuntimeValue>>> {
+pub fn mk_native_fn(name: String, func: ClosureType) -> Arc<Mutex<Box<dyn RuntimeValue>>> {
     let with_call = WithFnCall::new(func);
     Arc::new(Mutex::new(Box::new(NativeFnValue::new(name, with_call))))
 }
