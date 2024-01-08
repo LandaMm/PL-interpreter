@@ -3,11 +3,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use serde::Serialize;
+
 use super::{RuntimeValue, ValueType};
 
 pub type ClassInstanceMapValue = Arc<Mutex<Box<dyn RuntimeValue>>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ClassInstanceValue {
     kind: ValueType,
     class_name: String,

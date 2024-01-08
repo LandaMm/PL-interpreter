@@ -1,6 +1,8 @@
+use serde::Serialize;
+
 use super::{RuntimeValue, ValueType};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct StringValue {
     kind: ValueType,
     value: String,

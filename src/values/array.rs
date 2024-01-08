@@ -1,8 +1,10 @@
 use std::sync::{Arc, Mutex};
 
+use serde::Serialize;
+
 use super::{RuntimeValue, ValueType};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ArrayValue {
     kind: ValueType,
     value: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>,
@@ -39,7 +41,7 @@ impl From<Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>> for ArrayValue {
     fn from(value: Vec<Arc<Mutex<Box<dyn RuntimeValue>>>>) -> Self {
         Self {
             kind: ValueType::Array,
-            value: value,
+            value,
         }
     }
 }

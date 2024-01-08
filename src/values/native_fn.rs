@@ -3,6 +3,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use serde::{ser::SerializeStruct, Serialize, Serializer};
+
 use crate::{RuntimeValue, ValueType};
 
 pub type ClosureType = Arc<
@@ -49,6 +51,18 @@ impl NativeFnValue {
 
     pub fn callee(&self) -> WithFnCall<ClosureType> {
         self.call.clone()
+    }
+}
+
+impl Serialize for NativeFnValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("NativeFn", 2)?;
+        state.serialize_field("name", &self.name)?;
+        state.serialize_field("kind", &self.kind())?;
+        state.end()
     }
 }
 

@@ -1,6 +1,7 @@
 use super::{RuntimeValue, ValueType};
+use serde::Serialize;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct IntegerValue {
     kind: ValueType,
     value: isize,

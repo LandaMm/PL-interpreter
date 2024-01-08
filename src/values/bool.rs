@@ -1,6 +1,8 @@
+use serde::Serialize;
+
 use crate::{RuntimeValue, ValueType};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct BoolValue {
     kind: ValueType,
     value: bool,

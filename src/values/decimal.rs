@@ -1,6 +1,8 @@
+use serde::Serialize;
+
 use super::{RuntimeValue, ValueType};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct DecimalValue {
     kind: ValueType,
     value: f64,

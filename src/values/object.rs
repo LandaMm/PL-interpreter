@@ -3,12 +3,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use serde::Serialize;
+
 use super::{RuntimeValue, ValueType};
 
 pub type Key = String;
 pub type Value = Arc<Mutex<Box<dyn RuntimeValue>>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ObjectValue {
     kind: ValueType,
     map: HashMap<Key, Value>,

@@ -4,10 +4,11 @@ use std::{
 };
 
 use pl_ast::Node;
+use serde::Serialize;
 
 use super::{RuntimeValue, ValueType};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ClassProperty {
     pub name: String,
     pub value: Arc<Mutex<Box<dyn RuntimeValue>>>,
@@ -25,7 +26,7 @@ impl Clone for ClassProperty {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ClassMethodParameter {
     pub name: String,
     pub default_value: Option<Arc<Mutex<Box<dyn RuntimeValue>>>>,
@@ -49,7 +50,7 @@ impl Clone for ClassMethodParameter {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ClassMethod {
     pub name: String,
     pub args: Vec<ClassMethodParameter>,
@@ -57,7 +58,7 @@ pub struct ClassMethod {
     pub is_static: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ClassValue {
     kind: ValueType,
     pub name: String,

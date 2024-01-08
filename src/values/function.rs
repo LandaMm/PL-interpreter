@@ -4,10 +4,11 @@ use std::{
 };
 
 use pl_ast::Node;
+use serde::Serialize;
 
 use crate::{EnvironmentId, RuntimeValue, ValueType};
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct FunctionParameter {
     pub name: String,
     pub default_value: Option<Arc<Mutex<Box<dyn RuntimeValue>>>>,
@@ -43,7 +44,7 @@ impl FunctionParameter {
 //     }
 // }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct FunctionValue {
     kind: ValueType,
     pub name: String,
