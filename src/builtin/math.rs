@@ -1,3 +1,4 @@
+use core::f64;
 use rand::Rng;
 use std::{
     collections::HashMap,
@@ -187,7 +188,7 @@ pub fn get_math() -> HashMap<Key, Value> {
 
     map.insert(
         "PI".to_string(),
-        mk_runtime_value(Box::new(DecimalValue::from(3.14159))),
+        mk_runtime_value(Box::new(DecimalValue::from(std::f64::consts::PI))),
     );
 
     map.insert(
