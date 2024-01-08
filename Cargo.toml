@@ -18,3 +18,5 @@ pl_ast = { git = "https://github.com/LandaMm/PL.git", branch = "lib" }
 dyn-clone = "1.0.16"
 lazy_static = "1.4.0"
 rand = "0.8.5"
+erased-serde = "0.4.2"
+serde = { version = "1.0.195", features = ["derive", "rc"] }
