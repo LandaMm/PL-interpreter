@@ -43,5 +43,6 @@ pub enum ValueType {
 
 pub trait RuntimeValue: DynClone + Debug + Send + Sync {
     fn kind(&self) -> ValueType;
+    #[allow(clippy::wrong_self_convention)]
     fn into_any(&self) -> Box<dyn Any>;
 }
